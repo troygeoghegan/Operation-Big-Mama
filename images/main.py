@@ -61,7 +61,7 @@ class RomanticBackground:
 
 def load_images():
     imgs = []
-    IMAGE_FOLDER = "images"
+    IMAGE_FOLDER = os.path.dirname(os.path.abspath(__file__))
     if os.path.exists(IMAGE_FOLDER):
         valid = (".png", ".jpg", ".jpeg")
         files = [f for f in os.listdir(IMAGE_FOLDER) if f.lower().endswith(valid)]
@@ -101,7 +101,7 @@ game_images = load_images()
 options = [{"text": "Fancy Place: 30s", "limit": 30}, {"text": "Keg Mansion: 45s", "limit": 45}, {"text": "Burger King", "limit": None}]
 selected_idx, game_state = 0, "MENU"
 cards, first, second, wait_timer = [], None, None, 0
-start_time, paused_time = 0, 0
+start_time, paused_time, modal_image, modal_start_time = 0, 0, None, 0
 
 # Fonts (Web-safe fallbacks)
 try:
@@ -113,7 +113,7 @@ except:
 
 # --- Main Game Loop (Web Optimized) ---
 async def main():
-    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time
+    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time
     
     running = True
     while running:
@@ -138,10 +138,68 @@ async def main():
             start_txt = font_ui.render("START", True, COLOR_CREAM)
             screen.blit(start_txt, (start_btn.centerx - start_txt.get_width()//2, start_btn.centery - start_txt.get_height()//2))
 
-        elif game_state == "PLAYING":
+        elif game_state in ["PLAYING", "MODAL"]:
             romantic_bg.draw(screen, dt)
-            # Add logic for playing state here...
             
+            # Timer
+            limit = options[selected_idx]["limit"]
+            if limit and game_state == "PLAYING":
+                elapsed = (time.time() - start_time) - paused_time
+                remaining = max(0, limit - elapsed)
+                bar_h = int((remaining / limit) * (HEIGHT - 40))
+                pygame.draw.rect(screen, COLOR_DEEP_CHERRY, (20, 20, 20, HEIGHT - 40), 2)
+                pygame.draw.rect(screen, (220, 50, 50), (22, 20 + (HEIGHT - 40 - bar_h), 16, bar_h))
+                if remaining <= 0: game_state = "GAMEOVER"
+
+            # Match Logic
+            if game_state == "PLAYING" and first and second and wait_timer > 0:
+                wait_timer -= dt
+                if wait_timer <= 0:
+                    if first["image"] == second["image"]:
+                        first["matched"] = second["matched"] = True
+                        modal_image, modal_start_time, game_state = first["image"], time.time(), "MODAL"
+                    else:
+                        first["flipped"] = second["flipped"] = False
+                    first = second = None
+
+            # Draw Tiles
+            for card in cards:
+                if card["matched"]: continue
+                
+                target = 1.0 if card["flipped"] or card["matched"] else 0.0
+                if card["flip_proc"] != target:
+                    card["flip_proc"] += (target - card["flip_proc"]) * 10 * dt
+                    if abs(card["flip_proc"] - target) < 0.01: card["flip_proc"] = target
+
+                flip_w = abs(math.cos(card["flip_proc"] * math.pi))
+                draw_rect = pygame.Rect(0, 0, int(CARD_W * flip_w), CARD_H)
+                draw_rect.center = card["rect"].center
+
+                if card["flip_proc"] > 0.5: # Front
+                    pygame.draw.rect(screen, COLOR_CREAM, draw_rect, border_radius=8)
+                    if flip_w > 0.1:
+                        scaled_img = pygame.transform.scale(card["image"], (int((SIDE-10)*flip_w), SIDE-10))
+                        screen.blit(scaled_img, (draw_rect.centerx - scaled_img.get_width()//2, draw_rect.centery - scaled_img.get_height()//2))
+                else: # Back
+                    pygame.draw.rect(screen, COLOR_CARD_BACK, draw_rect, border_radius=8)
+                    beat = (1.1 + math.sin(time.time()*3 + card["seed"]*10)*0.1) * flip_w
+                    draw_vector_heart(screen, draw_rect.centerx, draw_rect.centery, beat, COLOR_CREAM, 180)
+
+            # Modal Fade
+            if game_state == "MODAL":
+                m_elapsed = time.time() - modal_start_time
+                if m_elapsed < 2.0:
+                    progress = m_elapsed / 2.0
+                    size_val = SIDE + (progress * (HEIGHT - SIDE - 20))
+                    alpha = max(0, 255 - int(progress * 255))
+                    scaled = pygame.transform.smoothscale(modal_image, (int(size_val), int(size_val)))
+                    scaled.set_alpha(alpha)
+                    screen.blit(scaled, scaled.get_rect(center=(WIDTH//2, HEIGHT//2)))
+                else:
+                    paused_time += 2.0
+                    game_state = "PLAYING"
+                    if all(c["matched"] for c in cards): game_state = "WON"
+
         elif game_state == "WON" or game_state == "GAMEOVER":
             # Show end screen rewards
             msg = REWARDS[selected_idx] if game_state == "WON" else "Better luck next time!"
@@ -164,7 +222,13 @@ async def main():
                         if pygame.Rect(WIDTH//2 - 160, 150 + i*65, 320, 50).collidepoint(mx, my): 
                             selected_idx = i
                     if pygame.Rect(WIDTH//2 - 70, 360, 140, 50).collidepoint(mx, my):
-                        cards, game_state, start_time = create_board(game_images), "PLAYING", time.time()
+                        cards, game_state, start_time, paused_time = create_board(game_images), "PLAYING", time.time(), 0
+                elif game_state == "PLAYING" and wait_timer <= 0:
+                    for card in cards:
+                        if card["rect"].collidepoint(mx, my) and not card["flipped"] and not card["matched"]:
+                            card["flipped"] = True
+                            if not first: first = card
+                            elif not second: second, wait_timer = card, 0.7
                 elif game_state in ["WON", "GAMEOVER"]:
                     if pygame.Rect(WIDTH//2 - 80, HEIGHT//2 + 60, 160, 50).collidepoint(mx, my):
                         game_state = "MENU"
