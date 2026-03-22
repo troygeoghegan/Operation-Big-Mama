@@ -3,7 +3,7 @@ import random
 import os
 import time
 import math
-import asyncio  # Required for web compatibility
+import asyncio
 from enum import Enum, auto
 import json
 import threading
@@ -14,7 +14,6 @@ try:
     HAS_FITZ = True
 except ImportError:
     HAS_FITZ = False
-    print("INFO: pymupdf not installed. PDF viewer unavailable. Run: pip install pymupdf")
 
 MENU_PDF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Menu", "Menu.pdf")
 
@@ -44,7 +43,6 @@ try:
 except ImportError:
     HAS_GEMINI = False
 
-# --- Video Support ---
 try:
     import cv2
     import numpy as np
@@ -52,7 +50,6 @@ try:
 except ImportError:
     HAS_VIDEO_LIB = False
 
-# --- Game States ---
 class GameState(Enum):
     MENU = auto()
     PLAYING = auto()
@@ -67,7 +64,6 @@ class GameState(Enum):
     PDF_VIEWER = auto()
     TRIVIA_CORRECT = auto()
 
-# --- Trivia Configuration ---
 TRIVIA_QUESTIONS = [
     {
         "question": "For 5 MINUTES: Which of these is the most essential component of a good nap?",
@@ -97,20 +93,17 @@ TRIVIA_QUESTIONS = [
 ]
 
 dynamic_trivia_loaded = False
-pending_trivia_questions = None  # Staged questions, applied only when a new game starts
+pending_trivia_questions = None
 
 def fetch_gemini_trivia():
     global pending_trivia_questions, dynamic_trivia_loaded
     
-    # --- PLUG IN YOUR API KEY HERE ---
     api_key = os.environ.get("GEMINI_API_KEY") or "REDACTED_API_KEY"
     
     if not HAS_GEMINI or not api_key:
-        print("Gemini API key not configured or SDK missing. Using fallback trivia.")
         return
-        
+
     try:
-        print("Fetching dynamic trivia from Gemini...")
         client = genai.Client(api_key=api_key)
         
         prompt = """
@@ -136,61 +129,37 @@ def fetch_gemini_trivia():
         if len(new_questions) > 0:
             pending_trivia_questions = new_questions
             dynamic_trivia_loaded = True
-            print("SUCCESS: Staged dynamic Gemini trivia (will apply on next game start).")
     except Exception as e:
         print(f"Failed to fetch dynamic trivia: {e}")
 
-# Start fetching in the background so it doesn't freeze the game startup
-threading.Thread(target=fetch_gemini_trivia, daemon=True).start()
+try:
+    threading.Thread(target=fetch_gemini_trivia, daemon=True).start()
+except Exception:
+    pass
 
-# --- Reward Configuration ---
 REWARDS = {
     0: "Enjoy a well-deserved nap!",
     1: "You've earned a relaxing massage!",
     2: "A delicious dinner is waiting for you!"
 }
 
-# --- Configuration & Romantic Palette ---
-pygame.init()
-WIDTH, HEIGHT = 998, 448 
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-clock = pygame.time.Clock()
+WIDTH, HEIGHT = 998, 448
+screen = None
+clock = None
 
-# --- PDF Menu (single scrollable surface) ---
 pdf_surface = None
 pdf_surface_height = 0
-if HAS_FITZ and os.path.exists(MENU_PDF):
-    try:
-        doc = fitz.open(MENU_PDF)
-        pages = []
-        for page in doc:
-            zoom = WIDTH / page.rect.width  # fill full width
-            pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
-            pages.append(pygame.image.load(io.BytesIO(pix.tobytes("png"))).convert())
-        doc.close()
-        if pages:
-            pdf_surface_height = sum(s.get_height() for s in pages)
-            pdf_surface = pygame.Surface((WIDTH, pdf_surface_height))
-            y = 0
-            for s in pages:
-                pdf_surface.blit(s, (0, y))
-                y += s.get_height()
-            print(f"SUCCESS: Loaded {len(pages)}-page menu PDF.")
-    except Exception as e:
-        print(f"ERROR: Could not load menu PDF: {e}")
 
-# Soft & Crafted Palette
-COLOR_PAPER_BG = (250, 246, 240)    # Soft warm cream
-COLOR_BLUSH = (235, 196, 196)       # Soft muted pink
-COLOR_SAGE = (194, 204, 186)        # Soft green
-COLOR_TEXT = (94, 80, 80)           # Warm dark brown
-COLOR_CREAM = (255, 252, 248)       # Brighter paper
-COLOR_CARD_BACK = (226, 172, 166)   # Deep blush
-COLOR_SHADOW = (220, 210, 205)      # Soft gray/brown shadow
+COLOR_PAPER_BG = (250, 246, 240)
+COLOR_BLUSH = (235, 196, 196)
+COLOR_SAGE = (194, 204, 186)
+COLOR_TEXT = (94, 80, 80)
+COLOR_CREAM = (255, 252, 248)
+COLOR_CARD_BACK = (226, 172, 166)
+COLOR_SHADOW = (220, 210, 205)
 
 COLOR_SOFT_PINK = COLOR_BLUSH
 COLOR_ROSE_GOLD = COLOR_SAGE
-COLOR_DEEP_CHERRY = COLOR_TEXT
 
 TIMER_BAR_WIDTH = 60 
 ROWS, COLS = 3, 6 
@@ -201,7 +170,6 @@ MAX_SIDE_W = (WIDTH - TIMER_BAR_WIDTH - (PADDING * (COLS + 1))) // COLS
 SIDE = min(MAX_SIDE_H, MAX_SIDE_W)
 CARD_W = CARD_H = SIDE
 
-# --- Magic & UI Rendering Helpers ---
 def wrap_text(text, font, max_width):
     words = text.split(' ')
     lines, current = [], ''
@@ -234,15 +202,11 @@ def draw_crafted_button(screen, rect, text, font, base_color):
     mx, my = pygame.mouse.get_pos()
     is_hover = rect.collidepoint(mx, my)
     offset = 2 if is_hover else 0
-    
-    # Soft shadow
+
     pygame.draw.rect(screen, COLOR_SHADOW, (rect.x + 3, rect.y + 5, rect.width, rect.height), border_radius=6)
-    
-    # Main button
+
     btn_rect = pygame.Rect(rect.x, rect.y - offset, rect.width, rect.height)
     pygame.draw.rect(screen, base_color, btn_rect, border_radius=6)
-    
-    # Dashed border (simulated with an inset rect)
     pygame.draw.rect(screen, COLOR_CREAM, btn_rect.inflate(-8, -8), width=1, border_radius=4)
     
     lines = wrap_text(text, font, btn_rect.width - 16)
@@ -312,15 +276,13 @@ def create_board(images, num_pairs=9):
     random.shuffle(deck)
     cards = []
 
-    # Determine grid dimensions based on selected option
-    if selected_idx == 0: # Nap Time (6 pairs)
+    if selected_idx == 0:
         rows, cols = 3, 4
-    elif selected_idx == 1: # Massage (6 pairs)
+    elif selected_idx == 1:
         rows, cols = 2, 6
-    else: # Dinner (9 pairs)
+    else:
         rows, cols = 3, 6
 
-    # Dynamic centering: Only offset for timer if the mode has a time limit
     has_timer = options[selected_idx]["limit"] is not None
     offset_x = TIMER_BAR_WIDTH if has_timer else 0
 
@@ -343,7 +305,6 @@ async def play_video(filepath):
         cap = cv2.VideoCapture(filepath)
         if not cap.isOpened(): return False
         
-        # Try to play audio if exists (e.g., MASSAGE.mp3)
         audio_path = os.path.splitext(filepath)[0] + ".mp3"
         if os.path.exists(audio_path):
             pygame.mixer.music.load(audio_path)
@@ -392,7 +353,7 @@ async def play_video(filepath):
                 
             pygame.display.flip()
             vid_clock.tick(fps)
-            await asyncio.sleep(0)  # Yield to prevent async crash
+            await asyncio.sleep(0)
             
         cap.release()
         pygame.mixer.music.stop()
@@ -408,86 +369,28 @@ async def play_video(filepath):
                 screen.blit(last_surf, (0, 0))
                 screen.blit(fade_surf, (0, 0))
                 pygame.display.flip()
-                pygame.event.pump()  # Prevent OS from thinking the app froze during fade
+                pygame.event.pump()
                 await asyncio.sleep(0)
-                
-            pygame.event.clear()  # Discard any leftover clicks to prevent ghost-clicking the reward screen
+
+            pygame.event.clear()
             
         return skipped
     except Exception as e:
         print(f"Video Error: {e}")
         return False
 
-# --- State ---
-crafted_bg = CraftedBackground()
-game_images = load_images()
+crafted_bg = None
+game_images = []
 
-# Load Reward Images
 reward_images = {}
-try:
-    root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    # Map indices to filenames: 0=Nap, 1=Massage, 2=Dinner
-    files = {0: "nap.jpg", 1: "massage.jpg", 2: "dinner.jpg"}
-    for idx, fname in files.items():
-        path = os.path.join(root_path, fname)
-        if os.path.exists(path):
-            reward_images[idx] = pygame.image.load(path).convert_alpha()
-except: pass
 
 menu_images = []
-try:
-    menu_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "menu")
-    if os.path.exists(menu_dir):
-        for i in range(7):
-            for ext in [".jpg", ".png", ".jpeg"]:
-                fpath = os.path.join(menu_dir, f"Menu-Images-{i}{ext}")
-                if os.path.exists(fpath):
-                    img = pygame.image.load(fpath).convert_alpha()
-                    scale = (WIDTH - 100) / img.get_width()
-                    menu_images.append(pygame.transform.smoothscale(img, (int(WIDTH - 100), int(img.get_height() * scale))))
-                    break
-except: pass
 
-# Load NODO Image
 nodo_image = None
-try:
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    for fname in ["NODO.avif", "NODO.png", "nodo.avif", "nodo.png"]:
-        npath = os.path.join(current_dir, fname)
-        if os.path.exists(npath):
-            nodo_image = pygame.image.load(npath).convert_alpha()
-            scale = min(WIDTH / nodo_image.get_width(), HEIGHT / nodo_image.get_height()) * 0.8
-            if scale < 1:
-                nodo_image = pygame.transform.smoothscale(nodo_image, (int(nodo_image.get_width() * scale), int(nodo_image.get_height() * scale)))
-            break
-except: pass
 
-# Check for NODO Video
 nodo_video_path = None
-try:
-    root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    video_dir = os.path.join(root_path, "Video")
-    if not os.path.exists(video_dir):
-        video_dir = os.path.join(root_path, "video")
-    if os.path.exists(video_dir):
-        for fname in ["NODO.mp4", "nodo.mp4", "NODO.mov", "nodo.mov"]:
-            fpath = os.path.join(video_dir, fname)
-            if os.path.exists(fpath):
-                print(f"SUCCESS: NODO video found at {fpath}")
-                nodo_video_path = fpath
-                break
-    if not nodo_video_path: print("INFO: NODO video not found in video folder.")
-except: pass
 
-# Check for MASSAGE Video
 massage_video_path = None
-try:
-    if os.path.exists(video_dir):
-        for fname in ["MASSAGE.mp4", "massage.mp4", "Massage.mp4", "MASSAGE.mov"]:
-            if os.path.exists(os.path.join(video_dir, fname)):
-                massage_video_path = os.path.join(video_dir, fname)
-                break
-except: pass
 
 options = [{"text": "Nap Time", "limit": None, "pairs": 6, "type": "trivia"}, {"text": "Massage", "limit": 120, "pairs": 6, "type": "memory"}, {"text": "Dinner", "limit": 45, "pairs": 9, "type": "memory"}]
 selected_idx, game_state = None, GameState.MENU
@@ -498,44 +401,9 @@ win_animation_start_time = 0
 win_particles = []
 current_question_idx = 0
 
-# Fonts (Web-safe fallbacks)
-_curr_dir = os.path.dirname(os.path.abspath(__file__))
-_parent_dir = os.path.dirname(_curr_dir)
-
-# Search in both current directory and parent directory, handling case differences
-amatemora_paths = [
-    os.path.join(_curr_dir, "Amatemora.ttf"), os.path.join(_curr_dir, "Amatemora.otf"),
-    os.path.join(_curr_dir, "amatemora.ttf"), os.path.join(_curr_dir, "amatemora.otf"),
-    os.path.join(_parent_dir, "Amatemora.ttf"), os.path.join(_parent_dir, "Amatemora.otf"),
-    os.path.join(_parent_dir, "amatemora.ttf"), os.path.join(_parent_dir, "amatemora.otf"),
-]
-
-font_title, font_win = None, None
-for path in amatemora_paths:
-    if os.path.exists(path):
-        try:
-            font_title = pygame.font.Font(path, 86)
-            font_win = pygame.font.Font(path, 64)
-            print(f"SUCCESS: Loaded font from {path}")
-            break
-        except Exception as e:
-            print(f"WARNING: Found font file at {path} but could not load it. Error: {e}")
-
-if not font_title:
-    print("WARNING: Could not find Amatemora font file. Falling back to system fonts.")
-    try:
-        font_title = pygame.font.SysFont("garamond", 76, italic=True)
-        font_win = pygame.font.SysFont("garamond", 54, italic=True)
-    except:
-        font_title = pygame.font.SysFont("didot", 76, italic=True)
-        font_win = pygame.font.SysFont("didot", 54, italic=True)
-
-try:
-    font_ui = pygame.font.SysFont("centurygothic", 22)
-except:
-    font_ui = pygame.font.SysFont("optima", 22)
-
-# --- Rendering Functions ---
+font_title = None
+font_win = None
+font_ui = None
 
 def draw_menu(screen, dt, selected_idx, completed_games):
     crafted_bg.draw(screen, dt)
@@ -573,18 +441,17 @@ def draw_playing(screen, dt, limit, elapsed_time, cards):
         draw_rect = pygame.Rect(0, 0, int(CARD_W * flip_w), CARD_H)
         draw_rect.center = card["rect"].center
         
-        # Shadow
         shadow_rect = draw_rect.copy()
         shadow_rect.y += 4
         pygame.draw.rect(screen, COLOR_SHADOW, shadow_rect, border_radius=8)
 
-        if card["flip_proc"] > 0.5: 
+        if card["flip_proc"] > 0.5:
             pygame.draw.rect(screen, COLOR_CREAM, draw_rect, border_radius=8)
             pygame.draw.rect(screen, COLOR_SHADOW, draw_rect, 1, border_radius=8)
             if flip_w > 0.1:
                 scaled_img = pygame.transform.scale(card["image"], (int((SIDE-10)*flip_w), SIDE-10))
                 screen.blit(scaled_img, (draw_rect.centerx - scaled_img.get_width()//2, draw_rect.centery - scaled_img.get_height()//2))
-        else: 
+        else:
             pygame.draw.rect(screen, COLOR_CARD_BACK, draw_rect, border_radius=8)
             pygame.draw.rect(screen, COLOR_CREAM, draw_rect.inflate(-10, -10), 1, border_radius=4)
 
@@ -680,30 +547,24 @@ def draw_transition_to_reward(screen, dt, transition_start_time, transition_part
 
     gift_surf = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
 
-    # Soft drop shadow
     shadow = pygame.Surface((box_w + 20, 16), pygame.SRCALPHA)
     pygame.draw.ellipse(shadow, (*COLOR_SHADOW, 120), shadow.get_rect())
     gift_surf.blit(shadow, (bx - 10, by + box_h + 2))
 
-    # Pulsing aura before opening
     if not is_open:
         pulse = abs(math.sin(elapsed * 8))
         for i in range(3, 0, -1):
             r = int((60 + pulse * 20) * (i / 3.0))
             pygame.draw.circle(gift_surf, (*COLOR_BLUSH, int(35 / i)), (cx, by + box_h // 2), r)
 
-    # --- Box body ---
     body_rect = pygame.Rect(bx, by, box_w, box_h)
     pygame.draw.rect(gift_surf, COLOR_BLUSH, body_rect, border_radius=6)
     pygame.draw.rect(gift_surf, COLOR_SHADOW, body_rect, 2, border_radius=6)
 
-    # Vertical ribbon on body
     ribbon_w = 14
     pygame.draw.rect(gift_surf, COLOR_SAGE, (cx - ribbon_w // 2, by, ribbon_w, box_h))
-    # Horizontal ribbon band on body
     pygame.draw.rect(gift_surf, COLOR_SAGE, (bx, by + box_h // 2 - ribbon_w // 2, box_w, ribbon_w))
 
-    # --- Lid ---
     if is_open:
         open_progress = min(1.0, (elapsed - shake_phase) / 0.4)
         lid_y = by - lid_h - int(open_progress * 55)
@@ -714,23 +575,17 @@ def draw_transition_to_reward(screen, dt, transition_start_time, transition_part
     pygame.draw.rect(gift_surf, COLOR_BLUSH, lid_rect, border_radius=6)
     pygame.draw.rect(gift_surf, COLOR_SHADOW, lid_rect, 2, border_radius=6)
 
-    # Vertical ribbon on lid
     pygame.draw.rect(gift_surf, COLOR_SAGE, (cx - ribbon_w // 2, lid_y, ribbon_w, lid_h))
 
-    # --- Bow (two loops + knot) ---
     bow_cx, bow_cy = cx, lid_y - 2
     loop_w, loop_h = 20, 14
-    # Left loop
     pygame.draw.ellipse(gift_surf, COLOR_SAGE, (bow_cx - loop_w - 4, bow_cy - loop_h, loop_w, loop_h * 2))
     pygame.draw.ellipse(gift_surf, COLOR_SHADOW, (bow_cx - loop_w - 4, bow_cy - loop_h, loop_w, loop_h * 2), 2)
-    # Right loop
     pygame.draw.ellipse(gift_surf, COLOR_SAGE, (bow_cx + 4, bow_cy - loop_h, loop_w, loop_h * 2))
     pygame.draw.ellipse(gift_surf, COLOR_SHADOW, (bow_cx + 4, bow_cy - loop_h, loop_w, loop_h * 2), 2)
-    # Knot
     pygame.draw.circle(gift_surf, COLOR_SAGE, (bow_cx, bow_cy), 7)
     pygame.draw.circle(gift_surf, COLOR_SHADOW, (bow_cx, bow_cy), 7, 2)
 
-    # Burst hearts when open
     if is_open and len(transition_particles) < 150 and elapsed < spurt_phase:
         for _ in range(3):
             transition_particles.append({
@@ -799,7 +654,6 @@ def draw_trivia_correct(screen, dt, start_time, question_idx, heart_pos):
     draw_trivia(screen, dt, question_idx)
     elapsed = time.time() - start_time
 
-    # Multiple hearts float up from the clicked answer
     for i in range(3):
         offset_x = (i - 1) * 40
         delay = i * 0.15
@@ -846,14 +700,12 @@ def draw_pdf_viewer(screen, pdf_surf, surf_h, scroll_y):
         msg = font_ui.render("Menu PDF could not be loaded.", True, (220, 220, 220))
         screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2))
 
-    # Scroll indicator bar on the right edge
     if surf_h > HEIGHT:
         bar_h = max(30, int(HEIGHT * HEIGHT / surf_h))
         bar_y = int(scroll_y * (HEIGHT - bar_h) / max(1, surf_h - HEIGHT))
         pygame.draw.rect(screen, (60, 60, 60), (WIDTH - 8, 0, 8, HEIGHT))
         pygame.draw.rect(screen, (180, 180, 180), (WIDTH - 8, bar_y, 8, bar_h))
 
-    # Floating close button (top-right)
     close_rect = pygame.Rect(WIDTH - 120, 10, 110, 36)
     draw_crafted_button(screen, close_rect, "Close Menu", font_ui, COLOR_BLUSH)
     return close_rect
@@ -916,10 +768,140 @@ def draw_won_gameover(screen, dt, game_state_val, selected_idx, win_animation_st
 
     return menu_button_rect, save_button_rect
 
-# --- Main Game Loop (Web Optimized) ---
 async def main():
     global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx
-    
+    try:
+     await _main()
+    except Exception as e:
+     import traceback
+     print("CRASH:", e)
+     traceback.print_exc()
+
+async def _main():
+    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx
+    global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui
+
+    pygame.init()
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    clock = pygame.time.Clock()
+
+    pdf_surface = None
+    pdf_surface_height = 0
+    if HAS_FITZ and os.path.exists(MENU_PDF):
+        try:
+            doc = fitz.open(MENU_PDF)
+            pages = []
+            for page in doc:
+                zoom = WIDTH / page.rect.width
+                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+                pages.append(pygame.image.load(io.BytesIO(pix.tobytes("png"))).convert())
+            doc.close()
+            if pages:
+                pdf_surface_height = sum(s.get_height() for s in pages)
+                pdf_surface = pygame.Surface((WIDTH, pdf_surface_height))
+                y = 0
+                for s in pages:
+                    pdf_surface.blit(s, (0, y))
+                    y += s.get_height()
+        except Exception as e:
+            print(f"ERROR: Could not load menu PDF: {e}")
+
+    crafted_bg = CraftedBackground()
+    game_images = load_images()
+
+    reward_images = {}
+    try:
+        root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        files = {0: "nap.jpg", 1: "massage.jpg", 2: "dinner.jpg"}
+        for idx, fname in files.items():
+            path = os.path.join(root_path, fname)
+            if os.path.exists(path):
+                reward_images[idx] = pygame.image.load(path).convert_alpha()
+    except: pass
+
+    menu_images = []
+    try:
+        menu_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "menu")
+        if os.path.exists(menu_dir):
+            for i in range(7):
+                for ext in [".jpg", ".png", ".jpeg"]:
+                    fpath = os.path.join(menu_dir, f"Menu-Images-{i}{ext}")
+                    if os.path.exists(fpath):
+                        img = pygame.image.load(fpath).convert_alpha()
+                        scale = (WIDTH - 100) / img.get_width()
+                        menu_images.append(pygame.transform.smoothscale(img, (int(WIDTH - 100), int(img.get_height() * scale))))
+                        break
+    except: pass
+
+    nodo_image = None
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        for fname in ["NODO.avif", "NODO.png", "nodo.avif", "nodo.png"]:
+            npath = os.path.join(current_dir, fname)
+            if os.path.exists(npath):
+                nodo_image = pygame.image.load(npath).convert_alpha()
+                scale = min(WIDTH / nodo_image.get_width(), HEIGHT / nodo_image.get_height()) * 0.8
+                if scale < 1:
+                    nodo_image = pygame.transform.smoothscale(nodo_image, (int(nodo_image.get_width() * scale), int(nodo_image.get_height() * scale)))
+                break
+    except: pass
+
+    nodo_video_path = None
+    try:
+        root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        video_dir = os.path.join(root_path, "Video")
+        if not os.path.exists(video_dir):
+            video_dir = os.path.join(root_path, "video")
+        if os.path.exists(video_dir):
+            for fname in ["NODO.mp4", "nodo.mp4", "NODO.mov", "nodo.mov"]:
+                fpath = os.path.join(video_dir, fname)
+                if os.path.exists(fpath):
+                    nodo_video_path = fpath
+                    break
+    except: pass
+
+    massage_video_path = None
+    try:
+        if os.path.exists(video_dir):
+            for fname in ["MASSAGE.mp4", "massage.mp4", "Massage.mp4", "MASSAGE.mov"]:
+                if os.path.exists(os.path.join(video_dir, fname)):
+                    massage_video_path = os.path.join(video_dir, fname)
+                    break
+    except: pass
+
+    _curr_dir = os.path.dirname(os.path.abspath(__file__))
+    _parent_dir = os.path.dirname(_curr_dir)
+
+    amatemora_paths = [
+        os.path.join(_curr_dir, "Amatemora.ttf"), os.path.join(_curr_dir, "Amatemora.otf"),
+        os.path.join(_curr_dir, "amatemora.ttf"), os.path.join(_curr_dir, "amatemora.otf"),
+        os.path.join(_parent_dir, "Amatemora.ttf"), os.path.join(_parent_dir, "Amatemora.otf"),
+        os.path.join(_parent_dir, "amatemora.ttf"), os.path.join(_parent_dir, "amatemora.otf"),
+    ]
+
+    font_title, font_win = None, None
+    for path in amatemora_paths:
+        if os.path.exists(path):
+            try:
+                font_title = pygame.font.Font(path, 86)
+                font_win = pygame.font.Font(path, 64)
+                break
+            except:
+                pass
+
+    if not font_title:
+        try:
+            font_title = pygame.font.SysFont("garamond", 76, italic=True)
+            font_win = pygame.font.SysFont("garamond", 54, italic=True)
+        except:
+            font_title = pygame.font.SysFont("didot", 76, italic=True)
+            font_win = pygame.font.SysFont("didot", 54, italic=True)
+
+    try:
+        font_ui = pygame.font.SysFont("centurygothic", 22)
+    except:
+        font_ui = pygame.font.SysFont("optima", 22)
+
     scroll_y = 0
     nodo_start_time = 0
     transition_start_time = 0
@@ -928,17 +910,15 @@ async def main():
     menu_button_rect = None
     save_button_rect = None
     exit_button_rect = None
-    photo_saved = False
     pdf_scroll_y = 0
     pdf_close_rect = None
     correct_anim_start = 0
     correct_anim_pos = (WIDTH // 2, HEIGHT // 2)
     while running:
         dt = clock.tick(60) / 1000
-        
+
         if game_state == GameState.MENU:
             draw_menu(screen, dt, selected_idx, completed_games)
-            photo_saved = False
             
         elif game_state == GameState.PLAYING_TRIVIA:
             draw_trivia(screen, dt, current_question_idx)
@@ -1041,7 +1021,6 @@ async def main():
         elif game_state == GameState.WON or game_state == GameState.GAMEOVER:
             menu_button_rect, save_button_rect = draw_won_gameover(screen, dt, game_state, selected_idx, win_animation_start_time, win_particles, scroll_y, menu_images)
 
-        # --- Event Handling ---
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -1080,7 +1059,6 @@ async def main():
                                 transition_start_time = time.time()
                                 trigger_vibration()
                 elif game_state == GameState.PLAYING and wait_timer <= 0:
-                    # Auto Win Logic
                     if pygame.Rect(20, HEIGHT - 70, 110, 50).collidepoint(mx, my):
                         for c in cards: c["matched"] = True
                         completed_games.add(selected_idx)
@@ -1099,7 +1077,7 @@ async def main():
                         selected_idx = None
                 elif game_state in [GameState.WON, GameState.GAMEOVER, GameState.FINAL_MESSAGE]:
                     if game_state == GameState.WON and time.time() - win_animation_start_time < 0.5:
-                        continue # Brief anti-ghost-click cooldown
+                        continue
                     if menu_button_rect and menu_button_rect.collidepoint(mx, my):
                         if game_state == GameState.WON:
                             if len(completed_games) == len(options):
@@ -1136,8 +1114,7 @@ async def main():
                     scroll_y = max(0, min(scroll_y, max(0, content_h - HEIGHT)))
 
         pygame.display.flip()
-        await asyncio.sleep(0)  # Yield control back to the browser
+        await asyncio.sleep(0)
 
 if __name__ == "__main__":
-    # Execute the entry point
     asyncio.run(main())
