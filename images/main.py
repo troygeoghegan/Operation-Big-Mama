@@ -1009,17 +1009,23 @@ async def _main():
                 pass
 
     if not font_title:
-        try:
-            font_title = pygame.font.SysFont("garamond", 76, italic=True)
-            font_win = pygame.font.SysFont("garamond", 54, italic=True)
-        except:
-            font_title = pygame.font.SysFont("didot", 76, italic=True)
-            font_win = pygame.font.SysFont("didot", 54, italic=True)
+        font_title = pygame.font.SysFont(None, 76)
+        font_win = pygame.font.SysFont(None, 54)
 
-    try:
-        font_ui = pygame.font.SysFont("centurygothic", 22)
-    except:
-        font_ui = pygame.font.SysFont("optima", 22)
+    melon_paths = [
+        os.path.join(_curr_dir, "Melon Pop.ttf"),
+        os.path.join(_parent_dir, "Melon Pop.ttf"),
+    ]
+    font_ui = None
+    for path in melon_paths:
+        if os.path.exists(path):
+            try:
+                font_ui = pygame.font.Font(path, 22)
+                break
+            except:
+                pass
+    if not font_ui:
+        font_ui = pygame.font.SysFont(None, 22)
 
     scroll_y = 0
     nodo_start_time = 0
