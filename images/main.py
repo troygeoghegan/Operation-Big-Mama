@@ -29,6 +29,8 @@ try:
 except ImportError:
     HAS_JS = False
 
+IS_WEB = HAS_JS
+
 def trigger_vibration():
     if HAS_VIBRATOR:
         try: vibrator.vibrate(0.4)
@@ -43,12 +45,14 @@ try:
 except ImportError:
     HAS_GEMINI = False
 
-try:
-    import cv2
-    import numpy as np
-    HAS_VIDEO_LIB = True
-except ImportError:
-    HAS_VIDEO_LIB = False
+HAS_VIDEO_LIB = False
+if not IS_WEB:
+    try:
+        cv2 = __import__("cv2")
+        np = __import__("numpy")
+        HAS_VIDEO_LIB = True
+    except ImportError:
+        pass
 
 class GameState(Enum):
     MENU = auto()
@@ -63,6 +67,7 @@ class GameState(Enum):
     FINAL_MESSAGE = auto()
     PDF_VIEWER = auto()
     TRIVIA_CORRECT = auto()
+    TRIVIA_FAIL_FADE = auto()
 
 TRIVIA_QUESTIONS = [
     {
