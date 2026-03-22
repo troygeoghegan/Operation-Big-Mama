@@ -1141,5 +1141,4 @@ async def _main():
         pygame.display.flip()
         await asyncio.sleep(0)
 
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())
