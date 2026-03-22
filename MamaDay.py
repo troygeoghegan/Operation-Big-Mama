@@ -36,14 +36,15 @@ CARD_W = CARD_H = SIDE
 # --- Vector Graphic Helpers ---
 def draw_vector_heart(surf, x, y, size, color, alpha=255):
     points = []
+    max_r = int(17 * size) + 2
     for t in range(0, 628, 15):
         t_rad = t / 100
         hx = 16 * math.sin(t_rad)**3
         hy = -(13 * math.cos(t_rad) - 5 * math.cos(2*t_rad) - 2 * math.cos(3*t_rad) - math.cos(4*t_rad))
-        points.append((x + hx * size, y + hy * size))
-    temp_surf = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        points.append((max_r + hx * size, max_r + hy * size))
+    temp_surf = pygame.Surface((max_r * 2, max_r * 2), pygame.SRCALPHA)
     pygame.draw.polygon(temp_surf, (*color, alpha), points)
-    surf.blit(temp_surf, (0, 0))
+    surf.blit(temp_surf, (x - max_r, y - max_r))
 
 class RomanticBackground:
     def __init__(self):
@@ -73,10 +74,17 @@ def load_images():
                 imgs.append(img)
                 if len(imgs) == 9: break
             except: continue
+    heart_colors = [
+        COLOR_ROSE_GOLD, COLOR_SOFT_PINK, COLOR_DEEP_CHERRY,
+        (255, 182, 193), (221, 160, 221), (231, 188, 187)
+    ]
+    color_idx = 0
     while len(imgs) < 9:
         surf = pygame.Surface((SIDE-10, SIDE-10), pygame.SRCALPHA)
-        pygame.draw.circle(surf, (200, 100, 150), (SIDE//2-5, SIDE//2-5), SIDE//3)
+        color = heart_colors[color_idx % len(heart_colors)]
+        draw_vector_heart(surf, (SIDE-10)//2, (SIDE-10)//2, (SIDE-10)/40.0, color)
         imgs.append(surf)
+        color_idx += 1
     return imgs
 
 def create_board(images):
