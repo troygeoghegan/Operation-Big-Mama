@@ -159,7 +159,7 @@ pdf_surface_height = 0
 
 COLOR_PAPER_BG = (250, 246, 240)
 COLOR_BLUSH = (235, 196, 196)
-COLOR_SAGE = (194, 204, 186)
+COLOR_SAGE = (200, 185, 220)
 COLOR_TEXT = (94, 80, 80)
 COLOR_CREAM = (255, 252, 248)
 COLOR_CARD_BACK = (226, 172, 166)
@@ -271,8 +271,8 @@ def load_images():
             except: continue
                 
     heart_colors = [
-        (235, 196, 196), (226, 172, 166), (194, 204, 186),
-        (245, 230, 210), (210, 180, 180), (200, 210, 200)
+        (235, 196, 196), (226, 172, 166), (200, 185, 220),
+        (245, 230, 210), (210, 180, 180), (215, 200, 230)
     ]
     color_idx = 0
     while len(imgs) < 9:
