@@ -56,6 +56,7 @@ if not IS_WEB:
 
 class GameState(Enum):
     ORIENTATION_PROMPT = auto()
+    LANDSCAPE_READY = auto()
     MENU = auto()
     PLAYING = auto()
     PLAYING_TRIVIA = auto()
@@ -398,6 +399,8 @@ nodo_video_path = None
 
 massage_video_path = None
 
+landscape_ready_start = 0.0
+
 options = [{"text": "Nap Time", "limit": None, "pairs": 6, "type": "trivia"}, {"text": "Massage", "limit": 120, "pairs": 6, "type": "memory"}, {"text": "Dinner", "limit": 45, "pairs": 9, "type": "memory"}]
 selected_idx = None
 game_state = GameState.ORIENTATION_PROMPT if IS_WEB else GameState.MENU
@@ -500,6 +503,128 @@ def draw_orientation_prompt(screen, dt):
     msg_font = font_ui if font_ui else pygame.font.SysFont(None, 28)
     draw_soft_text(screen, "Please rotate your phone", msg_font, COLOR_TEXT, (cx, cy + 130))
     draw_soft_text(screen, "to landscape to play  🌸", msg_font, COLOR_CARD_BACK, (cx, cy + 158))
+
+    return False
+
+
+def draw_thumbs_up(surf, cx, cy, scale):
+    """Draw a thumbs-up icon centred at (cx, cy), scaled by `scale`."""
+    s = scale
+    bc = COLOR_BLUSH
+    dc = COLOR_CARD_BACK   # darker outline/detail
+    gc = COLOR_ROSE_GOLD   # highlight accent
+
+    # Fist body (rounded rectangle below thumb)
+    fist_w, fist_h = int(52*s), int(44*s)
+    fist_rect = pygame.Rect(cx - fist_w//2, cy - fist_h//4, fist_w, fist_h)
+    pygame.draw.rect(surf, bc,  fist_rect, border_radius=int(10*s))
+    pygame.draw.rect(surf, dc,  fist_rect, int(2*s), border_radius=int(10*s))
+
+    # Knuckle lines
+    for i in range(1, 4):
+        kx = fist_rect.left + int(fist_w * i / 4)
+        pygame.draw.line(surf, dc,
+                         (kx, fist_rect.top + int(4*s)),
+                         (kx, fist_rect.top + int(14*s)), max(1, int(1.5*s)))
+
+    # Thumb (polygon pointing upward-left)
+    tx, ty = cx - int(14*s), cy - int(8*s)
+    thumb = [
+        (tx,              ty),
+        (tx - int(18*s),  ty - int(38*s)),
+        (tx - int(8*s),   ty - int(52*s)),
+        (tx + int(10*s),  ty - int(42*s)),
+        (tx + int(16*s),  ty - int(18*s)),
+        (tx + int(16*s),  ty),
+    ]
+    pygame.draw.polygon(surf, bc, thumb)
+    pygame.draw.polygon(surf, dc, thumb, max(1, int(2*s)))
+
+    # Nail highlight
+    nail = [
+        (tx - int(12*s),  ty - int(38*s)),
+        (tx - int(4*s),   ty - int(50*s)),
+        (tx + int(8*s),   ty - int(42*s)),
+        (tx + int(4*s),   ty - int(32*s)),
+    ]
+    pygame.draw.polygon(surf, gc, nail)
+    pygame.draw.polygon(surf, dc, nail, max(1, int(1*s)))
+
+
+def draw_landscape_ready(screen, dt, elapsed):
+    """
+    Fade-to-white → paper + thumbs-up scale-bounce + 'Let's Go' slide-in.
+    Returns True when the user taps/clicks 'Let's Go'.
+    """
+    cx, cy = WIDTH // 2, HEIGHT // 2
+
+    # --- timing constants ---
+    FADE_DUR   = 0.35   # white fade out
+    THUMB_IN   = 0.55   # thumb finishes scaling in
+    BTN_IN     = 0.90   # button finishes sliding in
+
+    # White flash overlay (fades out over FADE_DUR)
+    white_alpha = max(0, int(255 * (1.0 - elapsed / FADE_DUR)))
+    if white_alpha > 0:
+        overlay = pygame.Surface((WIDTH, HEIGHT))
+        overlay.fill((255, 255, 255))
+        overlay.set_alpha(white_alpha)
+        crafted_bg.draw(screen, dt)
+        screen.blit(overlay, (0, 0))
+    else:
+        crafted_bg.draw(screen, dt)
+
+    # --- thumbs-up ---
+    thumb_prog = max(0.0, min(1.0, (elapsed - FADE_DUR) / (THUMB_IN - FADE_DUR)))
+    if thumb_prog > 0:
+        # elastic overshoot: scale goes 0 → 1.18 → 1.0
+        if thumb_prog < 0.7:
+            scale = thumb_prog / 0.7 * 1.18
+        else:
+            scale = 1.18 - (thumb_prog - 0.7) / 0.3 * 0.18
+        scale = max(0.01, scale)
+
+        # subtle float bob once fully in
+        bob = 0.0
+        if elapsed > THUMB_IN:
+            bob = math.sin((elapsed - THUMB_IN) * 2.8) * 6
+
+        thumb_surf = pygame.Surface((160, 160), pygame.SRCALPHA)
+        draw_thumbs_up(thumb_surf, 80, 110, scale)
+        screen.blit(thumb_surf, (cx - 80, cy - 130 + int(bob)))
+
+    # --- "Let's Go" button ---
+    btn_prog = max(0.0, min(1.0, (elapsed - THUMB_IN) / (BTN_IN - THUMB_IN)))
+    btn_rect = None
+    if btn_prog > 0:
+        slide = int((1.0 - btn_prog) * 40)          # slides up from below
+        btn_alpha = int(btn_prog * 255)
+
+        btn_w, btn_h = 200, 50
+        btn_y = cy + 60 + slide
+        btn_rect = pygame.Rect(cx - btn_w//2, btn_y, btn_w, btn_h)
+
+        btn_surf = pygame.Surface((btn_w, btn_h), pygame.SRCALPHA)
+        pygame.draw.rect(btn_surf, (*COLOR_BLUSH, btn_alpha),
+                         (0, 0, btn_w, btn_h), border_radius=25)
+        pygame.draw.rect(btn_surf, (*COLOR_CARD_BACK, btn_alpha),
+                         (0, 0, btn_w, btn_h), 2, border_radius=25)
+        screen.blit(btn_surf, (btn_rect.x, btn_rect.y))
+
+        if font_ui and btn_alpha > 60:
+            lbl = font_ui.render("Let's Go  🌸", True, COLOR_TEXT)
+            lbl.set_alpha(btn_alpha)
+            screen.blit(lbl, (cx - lbl.get_width()//2, btn_y + btn_h//2 - lbl.get_height()//2))
+
+    # check click
+    if btn_prog >= 1.0:
+        for event in pygame.event.get(pygame.MOUSEBUTTONDOWN):
+            if btn_rect and btn_rect.collidepoint(event.pos):
+                return True
+        for event in pygame.event.get(pygame.FINGERDOWN):
+            fx, fy = int(event.x * WIDTH), int(event.y * HEIGHT)
+            if btn_rect and btn_rect.collidepoint(fx, fy):
+                return True
 
     return False
 
@@ -891,7 +1016,7 @@ async def main():
             await asyncio.sleep(1)
 
 async def _main():
-    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx
+    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start
     global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui
 
     pygame.display.init()
@@ -1044,6 +1169,12 @@ async def _main():
 
         if game_state == GameState.ORIENTATION_PROMPT:
             if draw_orientation_prompt(screen, dt):
+                game_state = GameState.LANDSCAPE_READY
+                landscape_ready_start = time.time()
+
+        elif game_state == GameState.LANDSCAPE_READY:
+            elapsed = time.time() - landscape_ready_start
+            if draw_landscape_ready(screen, dt, elapsed):
                 game_state = GameState.MENU
 
         elif game_state == GameState.MENU:
