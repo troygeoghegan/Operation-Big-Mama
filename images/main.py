@@ -497,11 +497,11 @@ def draw_orientation_prompt(screen, dt):
 
     # Title text
     if font_title:
-        draw_soft_text(screen, "For Mama", font_title, COLOR_TEXT, (cx, cy - 155))
+        draw_soft_text(screen, "Hey Mama!", font_title, COLOR_TEXT, (cx, cy - 155))
 
     # Instruction text
     msg_font = font_ui if font_ui else pygame.font.SysFont(None, 28)
-    draw_soft_text(screen, "Please rotate your phone", msg_font, COLOR_TEXT, (cx, cy + 130))
+    draw_soft_text(screen, "Let's rotate your phone", msg_font, COLOR_TEXT, (cx, cy + 130))
     draw_soft_text(screen, "to landscape to play  🌸", msg_font, COLOR_CARD_BACK, (cx, cy + 158))
 
     return False
