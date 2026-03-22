@@ -795,7 +795,13 @@ async def _main():
     global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx
     global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui
 
-    pygame.init()
+    pygame.display.init()
+    pygame.font.init()
+    if not IS_WEB:
+        try:
+            pygame.mixer.init()
+        except Exception:
+            pass
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     clock = pygame.time.Clock()
 
