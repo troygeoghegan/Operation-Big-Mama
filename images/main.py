@@ -150,7 +150,7 @@ REWARDS = {
     2: "A delicious dinner is waiting for you!"
 }
 
-WIDTH, HEIGHT = 998, 448
+WIDTH, HEIGHT = 450, 800
 screen = None
 clock = None
 
@@ -168,12 +168,13 @@ COLOR_SHADOW = (220, 210, 205)
 COLOR_SOFT_PINK = COLOR_BLUSH
 COLOR_ROSE_GOLD = COLOR_SAGE
 
-TIMER_BAR_WIDTH = 60 
-ROWS, COLS = 3, 6 
-PADDING = 12
+GAME_TOP = 55          # horizontal timer bar + gap
+GAME_BOTTOM = 50       # auto-win button zone
+ROWS, COLS = 6, 3      # worst-case grid (used for SIDE calculation)
+PADDING = 10
 
-MAX_SIDE_H = (HEIGHT - (PADDING * (ROWS + 1))) // ROWS
-MAX_SIDE_W = (WIDTH - TIMER_BAR_WIDTH - (PADDING * (COLS + 1))) // COLS
+MAX_SIDE_H = (HEIGHT - GAME_TOP - GAME_BOTTOM - PADDING * (ROWS + 1)) // ROWS
+MAX_SIDE_W = (WIDTH - PADDING * (COLS + 1)) // COLS
 SIDE = min(MAX_SIDE_H, MAX_SIDE_W)
 CARD_W = CARD_H = SIDE
 
@@ -288,20 +289,17 @@ def create_board(images, num_pairs=9):
     random.shuffle(deck)
     cards = []
 
-    if selected_idx == 0:
-        rows, cols = 3, 4
-    elif selected_idx == 1:
-        rows, cols = 2, 6
-    else:
-        rows, cols = 3, 6
-
-    has_timer = options[selected_idx]["limit"] is not None
-    offset_x = TIMER_BAR_WIDTH if has_timer else 0
+    # Portrait layout: always 3 columns
+    if selected_idx == 1:   # Massage: 6 pairs → 3×4
+        rows, cols = 4, 3
+    else:                   # Dinner: 9 pairs → 3×6
+        rows, cols = 6, 3
 
     grid_w = (cols * CARD_W) + ((cols - 1) * PADDING)
     grid_h = (rows * CARD_H) + ((rows - 1) * PADDING)
-    start_x = offset_x + (WIDTH - offset_x - grid_w) // 2
-    start_y = (HEIGHT - grid_h) // 2
+    available_h = HEIGHT - GAME_TOP - GAME_BOTTOM
+    start_x = (WIDTH - grid_w) // 2
+    start_y = GAME_TOP + (available_h - grid_h) // 2
     for i in range(rows * cols):
         col, row = i % cols, i // cols
         cards.append({
@@ -415,100 +413,43 @@ start_time, paused_time, modal_image, modal_start_time = 0, 0, None, 0
 win_animation_start_time = 0
 win_particles = []
 current_question_idx = 0
+prev_game_state_before_landscape = None
 
 font_title = None
 font_win = None
 font_ui = None
 
 def draw_orientation_prompt(screen, dt):
-    """Show a 'rotate your phone' screen in portrait mode. Returns True when landscape."""
-    is_portrait = True
-    if HAS_JS:
-        try:
-            is_portrait = js.window.innerHeight > js.window.innerWidth
-        except Exception:
-            is_portrait = False
-    else:
-        is_portrait = False
-
-    if not is_portrait:
-        return True
-
+    """Portrait welcome screen. Returns True when 'Let's Go' is tapped."""
     crafted_bg.draw(screen, dt)
-
     cx, cy = WIDTH // 2, HEIGHT // 2
     t = time.time()
 
-    # Gentle bounce on the rotation angle
-    bounce = math.sin(t * 2.5) * 0.08
-    angle = -math.pi / 4 + bounce  # tilted mid-rotation
+    # Floating heart accent — large, centre-screen
+    bob = math.sin(t * 1.6) * 8
+    draw_vector_heart(screen, cx, cy - 40 + bob, 4.5, COLOR_BLUSH, 120)
+    draw_vector_heart(screen, cx, cy - 40 + bob, 3.2, COLOR_CARD_BACK, 80)
 
-    # Draw phone silhouette rotated toward landscape
-    pw, ph = 54, 96  # portrait dims
-    cos_a, sin_a = math.cos(angle), math.sin(angle)
-
-    def rot(ox, oy):
-        return (cx + ox * cos_a - oy * sin_a,
-                cy + ox * sin_a + oy * cos_a)
-
-    corners = [rot(-pw//2, -ph//2), rot(pw//2, -ph//2),
-               rot(pw//2,  ph//2), rot(-pw//2,  ph//2)]
-
-    # Drop shadow
-    shadow = [(x+4, y+4) for x, y in corners]
-    pygame.draw.polygon(screen, COLOR_SHADOW, shadow, 0)
-    # Phone body
-    pygame.draw.polygon(screen, COLOR_BLUSH, corners, 0)
-    pygame.draw.polygon(screen, COLOR_CARD_BACK, corners, 3)
-
-    # Home button dot
-    hx, hy = rot(0, ph//2 - 10)
-    pygame.draw.circle(screen, COLOR_CARD_BACK, (int(hx), int(hy)), 5)
-    pygame.draw.circle(screen, COLOR_TEXT, (int(hx), int(hy)), 5, 1)
-
-    # Curved arrow arc around the phone
-    arc_r = 78
-    arc_start = math.pi * 0.55
-    arc_end   = math.pi * 1.95
-    steps = 32
-    arc_pts = []
-    for i in range(steps + 1):
-        a = arc_start + (arc_end - arc_start) * i / steps
-        arc_pts.append((cx + arc_r * math.cos(a), cy + arc_r * math.sin(a)))
-    if len(arc_pts) >= 2:
-        pygame.draw.lines(screen, COLOR_ROSE_GOLD, False, arc_pts, 3)
-
-    # Arrowhead at end of arc
-    tip = arc_pts[-1]
-    prev = arc_pts[-3]
-    dx, dy = tip[0] - prev[0], tip[1] - prev[1]
-    ln = max(math.hypot(dx, dy), 0.001)
-    dx, dy = dx / ln, dy / ln
-    perp = (-dy, dx)
-    arr = [
-        (tip[0] + dx * 12, tip[1] + dy * 12),
-        (tip[0] - perp[0] * 7, tip[1] - perp[1] * 7),
-        (tip[0] + perp[0] * 7, tip[1] + perp[1] * 7),
-    ]
-    pygame.draw.polygon(screen, COLOR_ROSE_GOLD, arr)
-
-    # Petal accents top / bottom
-    for px, py, pr in [(cx - 130, cy - 60, 8), (cx + 130, cy + 60, 6),
-                       (cx - 100, cy + 70, 5), (cx + 110, cy - 55, 7)]:
-        alpha = int(160 + 60 * math.sin(t * 1.3 + px))
-        psurf = pygame.Surface((pr*2+2, pr*2+2), pygame.SRCALPHA)
-        pygame.draw.circle(psurf, (*COLOR_BLUSH, alpha), (pr+1, pr+1), pr)
-        screen.blit(psurf, (px - pr - 1, py - pr - 1))
-
-    # Title text
+    # Title
     if font_title:
-        draw_soft_text(screen, "Hey Mama!", font_title, COLOR_TEXT, (cx, cy - 155))
+        draw_soft_text(screen, "Hey Mama!", font_title, COLOR_TEXT, (cx, 110))
 
-    # Instruction text
+    # Sub-title
     msg_font = font_ui if font_ui else pygame.font.SysFont(None, 28)
-    draw_soft_text(screen, "Let's rotate your phone", msg_font, COLOR_TEXT, (cx, cy + 130))
-    draw_soft_text(screen, "to landscape to play  🌸", msg_font, COLOR_CARD_BACK, (cx, cy + 158))
+    draw_soft_text(screen, "A little something just for you  🌸", msg_font, COLOR_CARD_BACK, (cx, 168))
 
+    # "Let's Go" button
+    btn_w, btn_h = 220, 54
+    btn_rect = pygame.Rect(cx - btn_w // 2, HEIGHT - 140, btn_w, btn_h)
+    draw_crafted_button(screen, btn_rect, "Let's Go  🌸", msg_font, COLOR_BLUSH)
+
+    for event in pygame.event.get(pygame.MOUSEBUTTONDOWN):
+        if btn_rect.collidepoint(event.pos):
+            return True
+    for event in pygame.event.get(pygame.FINGERDOWN):
+        fx, fy = int(event.x * WIDTH), int(event.y * HEIGHT)
+        if btn_rect.collidepoint(fx, fy):
+            return True
     return False
 
 
@@ -557,81 +498,66 @@ def draw_thumbs_up(surf, cx, cy, scale):
 
 
 def draw_landscape_ready(screen, dt, elapsed):
-    """
-    Fade-to-white → paper + thumbs-up scale-bounce + 'Let's Go' slide-in.
-    Returns True when the user taps/clicks 'Let's Go'.
-    """
+    """Winking face shown when phone is rotated to landscape. Auto-dismissed on return to portrait."""
+    crafted_bg.draw(screen, dt)
     cx, cy = WIDTH // 2, HEIGHT // 2
+    t = time.time()
 
-    # --- timing constants ---
-    FADE_DUR   = 0.35   # white fade out
-    THUMB_IN   = 0.55   # thumb finishes scaling in
-    BTN_IN     = 0.90   # button finishes sliding in
-
-    # White flash overlay (fades out over FADE_DUR)
-    white_alpha = max(0, int(255 * (1.0 - elapsed / FADE_DUR)))
-    if white_alpha > 0:
-        overlay = pygame.Surface((WIDTH, HEIGHT))
-        overlay.fill((255, 255, 255))
-        overlay.set_alpha(white_alpha)
-        crafted_bg.draw(screen, dt)
-        screen.blit(overlay, (0, 0))
+    # Entry scale-in (0 → 0.5 s)
+    entry = min(1.0, elapsed / 0.45)
+    if entry < 0.7:
+        scale = entry / 0.7 * 1.12
     else:
-        crafted_bg.draw(screen, dt)
+        scale = 1.12 - (entry - 0.7) / 0.3 * 0.12
+    scale = max(0.01, scale)
 
-    # --- thumbs-up ---
-    thumb_prog = max(0.0, min(1.0, (elapsed - FADE_DUR) / (THUMB_IN - FADE_DUR)))
-    if thumb_prog > 0:
-        # elastic overshoot: scale goes 0 → 1.18 → 1.0
-        if thumb_prog < 0.7:
-            scale = thumb_prog / 0.7 * 1.18
+    face_r = int(90 * scale)
+    fy_off = int((1.0 - scale) * 60)   # slides down as it grows in
+    face_cx, face_cy = cx, cy - 30 + fy_off
+
+    # Head
+    pygame.draw.circle(screen, COLOR_BLUSH,    (face_cx, face_cy), face_r)
+    pygame.draw.circle(screen, COLOR_CARD_BACK,(face_cx, face_cy), face_r, max(1, int(3*scale)))
+
+    # Cheek blush
+    for _, sign in [(-1, -1), (1, 1)]:
+        bs = pygame.Surface((int(42*scale), int(20*scale)), pygame.SRCALPHA)
+        pygame.draw.ellipse(bs, (*COLOR_BLUSH, 130), bs.get_rect())
+        screen.blit(bs, (face_cx + sign * int(52*scale) - bs.get_width()//2,
+                         face_cy + int(18*scale) - bs.get_height()//2))
+
+    # Eyes — wink cycle: blinks at ~2.5 s intervals for 0.25 s
+    wink_cycle = t % 2.8
+    is_winking = wink_cycle < 0.25 or (wink_cycle > 1.4 and wink_cycle < 1.65)
+    eye_y = face_cy - int(22 * scale)
+    for ex, do_wink in [(face_cx - int(28*scale), False),
+                        (face_cx + int(28*scale), is_winking)]:
+        if do_wink:
+            # Closed wink: ∩ arc
+            ew = int(22 * scale)
+            pygame.draw.arc(screen, COLOR_TEXT,
+                            pygame.Rect(ex - ew//2, eye_y - ew//4, ew, ew//2),
+                            0, math.pi, max(2, int(3*scale)))
         else:
-            scale = 1.18 - (thumb_prog - 0.7) / 0.3 * 0.18
-        scale = max(0.01, scale)
+            er = max(1, int(8 * scale))
+            pygame.draw.circle(screen, COLOR_TEXT,  (ex, eye_y), er)
+            pygame.draw.circle(screen, COLOR_CREAM, (ex - max(1,int(2*scale)), eye_y - max(1,int(2*scale))), max(1, int(3*scale)))
 
-        # subtle float bob once fully in
-        bob = 0.0
-        if elapsed > THUMB_IN:
-            bob = math.sin((elapsed - THUMB_IN) * 2.8) * 6
+    # Smile
+    sm_w, sm_h = int(56*scale), int(32*scale)
+    pygame.draw.arc(screen, COLOR_TEXT,
+                    pygame.Rect(face_cx - sm_w//2, face_cy - sm_h//4, sm_w, sm_h),
+                    math.pi, 2*math.pi, max(2, int(3*scale)))
 
-        thumb_surf = pygame.Surface((160, 160), pygame.SRCALPHA)
-        draw_thumbs_up(thumb_surf, 80, 110, scale)
-        screen.blit(thumb_surf, (cx - 80, cy - 130 + int(bob)))
-
-    # --- "Let's Go" button ---
-    btn_prog = max(0.0, min(1.0, (elapsed - THUMB_IN) / (BTN_IN - THUMB_IN)))
-    btn_rect = None
-    if btn_prog > 0:
-        slide = int((1.0 - btn_prog) * 40)          # slides up from below
-        btn_alpha = int(btn_prog * 255)
-
-        btn_w, btn_h = 200, 50
-        btn_y = cy + 60 + slide
-        btn_rect = pygame.Rect(cx - btn_w//2, btn_y, btn_w, btn_h)
-
-        btn_surf = pygame.Surface((btn_w, btn_h), pygame.SRCALPHA)
-        pygame.draw.rect(btn_surf, (*COLOR_BLUSH, btn_alpha),
-                         (0, 0, btn_w, btn_h), border_radius=25)
-        pygame.draw.rect(btn_surf, (*COLOR_CARD_BACK, btn_alpha),
-                         (0, 0, btn_w, btn_h), 2, border_radius=25)
-        screen.blit(btn_surf, (btn_rect.x, btn_rect.y))
-
-        if font_ui and btn_alpha > 60:
-            lbl = font_ui.render("Let's Go  🌸", True, COLOR_TEXT)
-            lbl.set_alpha(btn_alpha)
-            screen.blit(lbl, (cx - lbl.get_width()//2, btn_y + btn_h//2 - lbl.get_height()//2))
-
-    # check click
-    if btn_prog >= 1.0:
-        for event in pygame.event.get(pygame.MOUSEBUTTONDOWN):
-            if btn_rect and btn_rect.collidepoint(event.pos):
-                return True
-        for event in pygame.event.get(pygame.FINGERDOWN):
-            fx, fy = int(event.x * WIDTH), int(event.y * HEIGHT)
-            if btn_rect and btn_rect.collidepoint(fx, fy):
-                return True
-
-    return False
+    # Text
+    msg_font = font_ui if font_ui else pygame.font.SysFont(None, 26)
+    if entry > 0.6:
+        alpha = int(min(255, (entry - 0.6) / 0.4 * 255))
+        for txt, col, yo in [("Oops! I work best upright 😄", COLOR_TEXT, cy + 90),
+                              ("Flip me back to play  🌸",     COLOR_CARD_BACK, cy + 120)]:
+            s = msg_font.render(txt, True, col)
+            s.set_alpha(alpha)
+            screen.blit(s, (cx - s.get_width()//2, yo))
 
 
 def draw_menu(screen, dt, selected_idx, completed_games):
@@ -649,14 +575,14 @@ def draw_menu(screen, dt, selected_idx, completed_games):
 
 def draw_playing(screen, dt, limit, elapsed_time, cards):
     crafted_bg.draw(screen, dt)
-    
+
     if limit:
         remaining = max(0, limit - elapsed_time)
-        bar_h = int((remaining / limit) * (HEIGHT - 40))
-        pygame.draw.rect(screen, COLOR_SHADOW, (20, 20, 20, HEIGHT - 40), border_radius=10)
-        pygame.draw.rect(screen, COLOR_TEXT, (20, 20, 20, HEIGHT - 40), 2, border_radius=10)
-        if bar_h > 0:
-            pygame.draw.rect(screen, COLOR_SAGE, (22, 20 + (HEIGHT - 40 - bar_h) + 2, 16, bar_h - 4), border_radius=8)
+        bar_w = int((remaining / limit) * (WIDTH - 40))
+        pygame.draw.rect(screen, COLOR_SHADOW, (20, 18, WIDTH - 40, 14), border_radius=7)
+        pygame.draw.rect(screen, COLOR_TEXT,   (20, 18, WIDTH - 40, 14), 2, border_radius=7)
+        if bar_w > 0:
+            pygame.draw.rect(screen, COLOR_SAGE, (22, 20, bar_w - 4, 10), border_radius=5)
 
     for card in cards:
         if card["matched"]: continue
@@ -684,7 +610,7 @@ def draw_playing(screen, dt, limit, elapsed_time, cards):
             pygame.draw.rect(screen, COLOR_CARD_BACK, draw_rect, border_radius=8)
             pygame.draw.rect(screen, COLOR_CREAM, draw_rect.inflate(-10, -10), 1, border_radius=4)
 
-    auto_rect = pygame.Rect(20, HEIGHT - 70, 110, 50)
+    auto_rect = pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38)
     draw_crafted_button(screen, auto_rect, "Auto Win", font_ui, COLOR_BLUSH)
 
 def draw_trivia(screen, dt, question_idx):
@@ -696,11 +622,11 @@ def draw_trivia(screen, dt, question_idx):
         
     q_data = TRIVIA_QUESTIONS[question_idx]
     
-    q_rect = pygame.Rect(WIDTH//2 - 450, 90, 900, 110)
+    q_rect = pygame.Rect(10, 75, WIDTH - 20, 115)
     pygame.draw.rect(screen, COLOR_SHADOW, (q_rect.x + 4, q_rect.y + 6, q_rect.width, q_rect.height), border_radius=10)
-    pygame.draw.rect(screen, COLOR_CREAM, q_rect, border_radius=10) 
+    pygame.draw.rect(screen, COLOR_CREAM, q_rect, border_radius=10)
     pygame.draw.rect(screen, COLOR_BLUSH, q_rect, 2, border_radius=10)
-    
+
     q_lines = wrap_text(q_data["question"], font_ui, q_rect.width - 30)
     line_h = font_ui.get_height()
     y = q_rect.centery - (line_h * len(q_lines)) // 2
@@ -708,17 +634,13 @@ def draw_trivia(screen, dt, question_idx):
         q_txt = font_ui.render(line, True, COLOR_TEXT)
         screen.blit(q_txt, (q_rect.centerx - q_txt.get_width() // 2, y))
         y += line_h
-    
-    start_y = 230
+
+    start_y = 215
+    mx, my = pygame.mouse.get_pos()
     for i, opt in enumerate(q_data["options"]):
-        col = i % 2
-        row = i // 2
-        opt_rect = pygame.Rect(WIDTH//2 - 400 + col*420, start_y + row*80, 380, 60)
-        
-        mx, my = pygame.mouse.get_pos()
+        opt_rect = pygame.Rect(WIDTH // 2 - 190, start_y + i * 90, 380, 72)
         is_hover = opt_rect.collidepoint(mx, my)
         color_base = COLOR_SAGE if is_hover else COLOR_CREAM
-        
         draw_crafted_button(screen, opt_rect, opt, font_ui, color_base)
 
 def draw_modal(screen, modal_image, modal_start_time):
@@ -1021,7 +943,7 @@ async def main():
             await asyncio.sleep(1)
 
 async def _main():
-    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start
+    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape
     global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui
 
     pygame.display.init()
@@ -1172,15 +1094,26 @@ async def _main():
     while running:
         dt = clock.tick(60) / 1000
 
+        # --- landscape interrupt: winking face whenever phone is sideways ---
+        if IS_WEB:
+            try:
+                _in_landscape = js.window.innerWidth > js.window.innerHeight
+            except Exception:
+                _in_landscape = False
+            if _in_landscape and game_state != GameState.LANDSCAPE_READY:
+                prev_game_state_before_landscape = game_state
+                landscape_ready_start = time.time()
+                game_state = GameState.LANDSCAPE_READY
+            elif not _in_landscape and game_state == GameState.LANDSCAPE_READY:
+                game_state = prev_game_state_before_landscape or GameState.ORIENTATION_PROMPT
+
         if game_state == GameState.ORIENTATION_PROMPT:
             if draw_orientation_prompt(screen, dt):
-                game_state = GameState.LANDSCAPE_READY
-                landscape_ready_start = time.time()
+                game_state = GameState.MENU
 
         elif game_state == GameState.LANDSCAPE_READY:
             elapsed = time.time() - landscape_ready_start
-            if draw_landscape_ready(screen, dt, elapsed):
-                game_state = GameState.MENU
+            draw_landscape_ready(screen, dt, elapsed)
 
         elif game_state == GameState.MENU:
             draw_menu(screen, dt, selected_idx, completed_games)
@@ -1309,11 +1242,9 @@ async def _main():
                                 cards, game_state, start_time, paused_time = create_board(game_images, options[selected_idx]["pairs"]), GameState.PLAYING, time.time(), 0
                 elif game_state == GameState.PLAYING_TRIVIA:
                     q_data = TRIVIA_QUESTIONS[current_question_idx]
-                    start_y = 230
+                    start_y = 215
                     for i in range(4):
-                        col = i % 2
-                        row = i // 2
-                        opt_rect = pygame.Rect(WIDTH//2 - 400 + col*420, start_y + row*80, 380, 60)
+                        opt_rect = pygame.Rect(WIDTH // 2 - 190, start_y + i * 90, 380, 72)
                         if opt_rect.collidepoint(mx, my):
                             if i == q_data["answer"]:
                                 correct_anim_start = time.time()
@@ -1324,7 +1255,7 @@ async def _main():
                                 transition_start_time = time.time()
                                 trigger_vibration()
                 elif game_state == GameState.PLAYING and wait_timer <= 0:
-                    if pygame.Rect(20, HEIGHT - 70, 110, 50).collidepoint(mx, my):
+                    if pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38).collidepoint(mx, my):
                         for c in cards: c["matched"] = True
                         completed_games.add(selected_idx)
                         game_state = GameState.TRANSITION_TO_REWARD
