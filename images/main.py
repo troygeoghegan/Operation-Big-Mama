@@ -98,7 +98,7 @@ pending_trivia_questions = None
 def fetch_gemini_trivia():
     global pending_trivia_questions, dynamic_trivia_loaded
     
-    api_key = os.environ.get("GEMINI_API_KEY") or "REDACTED_API_KEY"
+    api_key = os.environ.get("GEMINI_API_KEY")
     
     if not HAS_GEMINI or not api_key:
         return
@@ -771,11 +771,25 @@ def draw_won_gameover(screen, dt, game_state_val, selected_idx, win_animation_st
 async def main():
     global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx
     try:
-     await _main()
-    except Exception as e:
-     import traceback
-     print("CRASH:", e)
-     traceback.print_exc()
+        await _main()
+    except Exception:
+        import traceback
+        err = traceback.format_exc()
+        print("CRASH:", err)
+        try:
+            pygame.init()
+            s = pygame.display.set_mode((998, 448))
+            s.fill((20, 20, 20))
+            f = pygame.font.SysFont(None, 22)
+            lines = err.strip().split('\n')
+            for i, line in enumerate(lines[-12:]):
+                surf = f.render(line[:90], True, (255, 80, 80))
+                s.blit(surf, (10, 10 + i * 24))
+            pygame.display.flip()
+        except:
+            pass
+        while True:
+            await asyncio.sleep(1)
 
 async def _main():
     global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx
