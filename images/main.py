@@ -55,6 +55,7 @@ if not IS_WEB:
         pass
 
 class GameState(Enum):
+    ORIENTATION_PROMPT = auto()
     MENU = auto()
     PLAYING = auto()
     PLAYING_TRIVIA = auto()
@@ -398,7 +399,8 @@ nodo_video_path = None
 massage_video_path = None
 
 options = [{"text": "Nap Time", "limit": None, "pairs": 6, "type": "trivia"}, {"text": "Massage", "limit": 120, "pairs": 6, "type": "memory"}, {"text": "Dinner", "limit": 45, "pairs": 9, "type": "memory"}]
-selected_idx, game_state = None, GameState.MENU
+selected_idx = None
+game_state = GameState.ORIENTATION_PROMPT if IS_WEB else GameState.MENU
 completed_games = set()
 cards, first, second, wait_timer = [], None, None, 0
 start_time, paused_time, modal_image, modal_start_time = 0, 0, None, 0
@@ -409,6 +411,98 @@ current_question_idx = 0
 font_title = None
 font_win = None
 font_ui = None
+
+def draw_orientation_prompt(screen, dt):
+    """Show a 'rotate your phone' screen in portrait mode. Returns True when landscape."""
+    is_portrait = True
+    if HAS_JS:
+        try:
+            is_portrait = js.window.innerHeight > js.window.innerWidth
+        except Exception:
+            is_portrait = False
+    else:
+        is_portrait = False
+
+    if not is_portrait:
+        return True
+
+    crafted_bg.draw(screen, dt)
+
+    cx, cy = WIDTH // 2, HEIGHT // 2
+    t = time.time()
+
+    # Gentle bounce on the rotation angle
+    bounce = math.sin(t * 2.5) * 0.08
+    angle = -math.pi / 4 + bounce  # tilted mid-rotation
+
+    # Draw phone silhouette rotated toward landscape
+    pw, ph = 54, 96  # portrait dims
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+
+    def rot(ox, oy):
+        return (cx + ox * cos_a - oy * sin_a,
+                cy + ox * sin_a + oy * cos_a)
+
+    corners = [rot(-pw//2, -ph//2), rot(pw//2, -ph//2),
+               rot(pw//2,  ph//2), rot(-pw//2,  ph//2)]
+
+    # Drop shadow
+    shadow = [(x+4, y+4) for x, y in corners]
+    pygame.draw.polygon(screen, COLOR_SHADOW, shadow, 0)
+    # Phone body
+    pygame.draw.polygon(screen, COLOR_BLUSH, corners, 0)
+    pygame.draw.polygon(screen, COLOR_CARD_BACK, corners, 3)
+
+    # Home button dot
+    hx, hy = rot(0, ph//2 - 10)
+    pygame.draw.circle(screen, COLOR_CARD_BACK, (int(hx), int(hy)), 5)
+    pygame.draw.circle(screen, COLOR_TEXT, (int(hx), int(hy)), 5, 1)
+
+    # Curved arrow arc around the phone
+    arc_r = 78
+    arc_start = math.pi * 0.55
+    arc_end   = math.pi * 1.95
+    steps = 32
+    arc_pts = []
+    for i in range(steps + 1):
+        a = arc_start + (arc_end - arc_start) * i / steps
+        arc_pts.append((cx + arc_r * math.cos(a), cy + arc_r * math.sin(a)))
+    if len(arc_pts) >= 2:
+        pygame.draw.lines(screen, COLOR_ROSE_GOLD, False, arc_pts, 3)
+
+    # Arrowhead at end of arc
+    tip = arc_pts[-1]
+    prev = arc_pts[-3]
+    dx, dy = tip[0] - prev[0], tip[1] - prev[1]
+    ln = max(math.hypot(dx, dy), 0.001)
+    dx, dy = dx / ln, dy / ln
+    perp = (-dy, dx)
+    arr = [
+        (tip[0] + dx * 12, tip[1] + dy * 12),
+        (tip[0] - perp[0] * 7, tip[1] - perp[1] * 7),
+        (tip[0] + perp[0] * 7, tip[1] + perp[1] * 7),
+    ]
+    pygame.draw.polygon(screen, COLOR_ROSE_GOLD, arr)
+
+    # Petal accents top / bottom
+    for px, py, pr in [(cx - 130, cy - 60, 8), (cx + 130, cy + 60, 6),
+                       (cx - 100, cy + 70, 5), (cx + 110, cy - 55, 7)]:
+        alpha = int(160 + 60 * math.sin(t * 1.3 + px))
+        psurf = pygame.Surface((pr*2+2, pr*2+2), pygame.SRCALPHA)
+        pygame.draw.circle(psurf, (*COLOR_BLUSH, alpha), (pr+1, pr+1), pr)
+        screen.blit(psurf, (px - pr - 1, py - pr - 1))
+
+    # Title text
+    if font_title:
+        draw_soft_text(screen, "For Mama", font_title, COLOR_TEXT, (cx, cy - 155))
+
+    # Instruction text
+    msg_font = font_ui if font_ui else pygame.font.SysFont(None, 28)
+    draw_soft_text(screen, "Please rotate your phone", msg_font, COLOR_TEXT, (cx, cy + 130))
+    draw_soft_text(screen, "to landscape to play  🌸", msg_font, COLOR_CARD_BACK, (cx, cy + 158))
+
+    return False
+
 
 def draw_menu(screen, dt, selected_idx, completed_games):
     crafted_bg.draw(screen, dt)
@@ -942,7 +1036,11 @@ async def _main():
     while running:
         dt = clock.tick(60) / 1000
 
-        if game_state == GameState.MENU:
+        if game_state == GameState.ORIENTATION_PROMPT:
+            if draw_orientation_prompt(screen, dt):
+                game_state = GameState.MENU
+
+        elif game_state == GameState.MENU:
             draw_menu(screen, dt, selected_idx, completed_games)
             
         elif game_state == GameState.PLAYING_TRIVIA:
