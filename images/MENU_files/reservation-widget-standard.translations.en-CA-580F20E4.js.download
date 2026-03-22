@@ -1,0 +1,5 @@
+const loadTranslations = (A) => {
+                            A.__TRANSLATIONS=A.__TRANSLATIONS||[],A.__TRANSLATIONS.push({"domain":"messages","locale_data":{"messages":{"":{"domain":"messages","plural_forms":"nplurals=2; plural=(n != 1);","lang":"en_CA"},"Today":["Today"],"%1$s day ago":["%1$s day ago","%1$s days ago"],"Make a Reservation":["Make a Reservation"],"Find a Table":["Find a Table"],"Reservation Date":["Reservation Date"],"Back":["Back"],"Next month":["Next month"],"Previous month":["Previous month"],"%1$s person":["%1$s person","%1$s people"],"Party size selector":["Party size selector"],"Join Waitlist":["Join Waitlist"],"Now":["Now"],"Reservation time":["Reservation time"]}}});
+                        };
+                        export default loadTranslations;
+                        
