@@ -238,9 +238,10 @@ class CraftedBackground:
             x, y = random.randint(0, WIDTH), random.randint(0, HEIGHT)
             c = random.choice([(240, 235, 230), (255, 252, 248)])
             self.paper.set_at((x, y), c)
-        self.particles = [{"x": random.randint(0, WIDTH), "y": random.randint(0, HEIGHT), 
-                           "size": random.uniform(0.5, 1.5), "speed": random.uniform(10, 25), 
-                           "seed": random.random(), "color": random.choice([COLOR_BLUSH, COLOR_SAGE, COLOR_CREAM])} for _ in range(25)]
+        self.particles = [{"x": random.randint(0, WIDTH), "y": random.randint(0, HEIGHT),
+                           "size": random.uniform(0.5, 1.5), "speed": random.uniform(10, 25),
+                           "seed": random.random(), "color": random.choice([COLOR_BLUSH, COLOR_SAGE, COLOR_CREAM]),
+                           "heart": i % 2 == 0} for i, _ in enumerate(range(25))]
 
     def draw(self, surf, dt):
         surf.blit(self.paper, (0, 0))
@@ -248,7 +249,11 @@ class CraftedBackground:
             p["y"] -= p["speed"] * dt
             if p["y"] < -20: p["y"] = HEIGHT + 20
             sway = math.sin(time.time()*0.5 + p["seed"]*5) * 15
-            pygame.draw.circle(surf, p["color"], (p["x"] + sway, p["y"]), p["size"] * 10)
+            px, py = int(p["x"] + sway), int(p["y"])
+            if p["heart"]:
+                draw_vector_heart(surf, px, py, p["size"], p["color"])
+            else:
+                pygame.draw.circle(surf, p["color"], (px, py), int(p["size"] * 10))
 
 def load_images():
     imgs = []
