@@ -322,7 +322,7 @@ async def play_video_web(url):
         v.setAttribute("ontouchstart","this.setAttribute('data-done','1');this.pause()")
         v.setAttribute("onerror",     "this.setAttribute('data-done','1')")
         v.style.cssText = ("position:fixed;top:0;left:0;width:100%;height:100%;"
-                           "z-index:9999;background:#000;object-fit:contain;")
+                           "z-index:9999;background:#000;object-fit:cover;")
         v.src = url
         js.document.body.appendChild(v)
         v.play()
@@ -344,7 +344,9 @@ async def show_online_menu():
 
         iframe = js.document.createElement("iframe")
         iframe.src = "https://nodoleslieville.ca"
-        iframe.style.cssText = "width:100%;height:100%;border:none;"
+        iframe.setAttribute("loading", "eager")
+        iframe.style.cssText = ("width:100vw;height:100vh;border:none;"
+                                "max-width:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;")
         wrap.appendChild(iframe)
 
         btn = js.document.createElement("button")
