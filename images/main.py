@@ -309,40 +309,16 @@ def create_board(images, num_pairs=9):
     return cards
 
 async def play_video_web(url):
-    """Play an HTML5 video overlay via js.eval, yield until it ends or is tapped."""
+    """Overlay an HTML5 video over the canvas and yield until it ends or is tapped."""
     if not IS_WEB:
         return
-    print("play_video_web: starting", url)
     try:
-        # Create/reuse a fullscreen video element over the canvas
-        js.eval(f"""(function(){{
-            var v = document.getElementById('nodo_video');
-            if (!v) {{
-                v = document.createElement('video');
-                v.id = 'nodo_video';
-                v.setAttribute('playsinline','');
-                v.setAttribute('webkit-playsinline','');
-                v.style.cssText = 'display:block;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;background:#000;object-fit:contain;';
-                document.body.appendChild(v);
-            }} else {{
-                v.style.display = 'block';
-            }}
-            v._done = false;
-            v.src = '{url}';
-            v.onended = function(){{ v._done = true; }};
-            v.onclick = v.ontouchstart = function(){{ v._done = true; v.pause(); }};
-            v.play().catch(function(e){{ console.warn('nodo video play error', e); v._done = true; }});
-        }})();""")
-        print("play_video_web: video element created and play() called")
-        while True:
-            done = js.eval("(function(){ var v=document.getElementById('nodo_video'); return !!(v && v._done); })()")
-            if done:
-                break
+        js.nodo_show(url)
+        while not bool(js.nodo_done()):
             await asyncio.sleep(0.1)
-        js.eval("(function(){ var v=document.getElementById('nodo_video'); if(v){ v.style.display='none'; v.src=''; v._done=false; } })()")
-        print("play_video_web: done")
+        js.nodo_hide()
     except Exception as e:
-        print("play_video_web error:", e)
+        print("video error:", e)
 
 async def play_video(filepath):
     if not HAS_VIDEO_LIB: return False
@@ -1227,7 +1203,6 @@ async def _main():
                     selected_idx = None
 
         elif game_state == GameState.PLAY_VIDEO_REWARD:
-            print("PLAY_VIDEO_REWARD state reached, IS_WEB=", IS_WEB, "selected_idx=", selected_idx)
             if IS_WEB:
                 await play_video_web("https://troygeoghegan.github.io/Operation-Big-Mama/nodo.mp4")
                 if selected_idx == 2:  # dinner → show the restaurant menu
