@@ -565,7 +565,7 @@ def draw_menu(screen, dt, selected_idx, completed_games):
     draw_soft_text(screen, "Happy Mama Day", font_title, COLOR_TEXT, (WIDTH//2, 60))
     
     for i, opt in enumerate(options):
-        rect = pygame.Rect(WIDTH//2 - 160, 170 + i*75, 320, 60)
+        rect = pygame.Rect(WIDTH//2 - 160, HEIGHT//2 - 110 + i*90, 320, 60)
         
         base_color = COLOR_BLUSH if i == selected_idx else COLOR_CREAM
         draw_crafted_button(screen, rect, opt["text"], font_ui, base_color)
@@ -615,7 +615,7 @@ def draw_playing(screen, dt, limit, elapsed_time, cards):
 
 def draw_trivia(screen, dt, question_idx):
     crafted_bg.draw(screen, dt)
-    draw_soft_text(screen, "Who Wants to Win a Nap?", font_win, COLOR_TEXT, (WIDTH//2, 40))
+    draw_soft_text(screen, "Who Wants to Win a Nap?", font_win, COLOR_TEXT, (WIDTH//2, 55))
     
     if question_idx >= len(TRIVIA_QUESTIONS):
         return
@@ -891,22 +891,23 @@ def draw_won_gameover(screen, dt, game_state_val, selected_idx, win_animation_st
             menu_button_rect = pygame.Rect(WIDTH - 120, HEIGHT - 60, 100, 40)
             draw_crafted_button(screen, menu_button_rect, "Menu", font_ui, COLOR_BLUSH)
         else:
-            avail_h = HEIGHT - 160
-            base_scale = min(1.0, avail_h / current_img.get_height())
+            avail_h = HEIGHT - 200
+            base_scale = min(1.0, avail_h / current_img.get_height(), (WIDTH - 40) / current_img.get_width())
             base_w, base_h = int(current_img.get_width() * base_scale), int(current_img.get_height() * base_scale)
             curr_w, curr_h = int(base_w * eased_progress), int(base_h * eased_progress)
-            
+            img_top = 100
+
             if curr_w > 0 and curr_h > 0:
                 pad = 15
                 img_x = WIDTH//2 - curr_w//2
-                img_y = 30 + (base_h - curr_h)//2
+                img_y = img_top + (base_h - curr_h)//2
                 pygame.draw.rect(screen, (255, 255, 255), (img_x - pad, img_y - pad, curr_w + pad*2, curr_h + pad*2))
                 scaled_img = pygame.transform.smoothscale(current_img, (curr_w, curr_h))
                 screen.blit(scaled_img, (img_x, img_y))
 
             if progress >= 1.0:
                 txt = font_win.render(msg, True, COLOR_TEXT)
-                screen.blit(txt, (WIDTH//2 - txt.get_width()//2, 80))
+                screen.blit(txt, (WIDTH//2 - txt.get_width()//2, 35))
                 
                 menu_button_rect = pygame.Rect(WIDTH//2 - 100, HEIGHT - 60, 200, 40)
                 btn_label = "Booked for 2pm" if selected_idx == 1 else "Momma's Menu"
