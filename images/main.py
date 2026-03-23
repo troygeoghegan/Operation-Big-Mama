@@ -309,26 +309,58 @@ def create_board(images, num_pairs=9):
     return cards
 
 async def play_video_web(url):
-    """Overlay an HTML5 video over the canvas and yield until it ends or is tapped."""
+    """Fullscreen HTML5 video over the canvas. Tap anywhere or wait for end."""
     if not IS_WEB:
         return
     try:
-        js.nodo_show(url)
-        while not bool(js.nodo_done()):
+        v = js.document.createElement("video")
+        v.setAttribute("playsinline", "")
+        v.setAttribute("webkit-playsinline", "")
+        v.setAttribute("data-done", "0")
+        v.setAttribute("onended",     "this.setAttribute('data-done','1')")
+        v.setAttribute("onclick",     "this.setAttribute('data-done','1');this.pause()")
+        v.setAttribute("ontouchstart","this.setAttribute('data-done','1');this.pause()")
+        v.setAttribute("onerror",     "this.setAttribute('data-done','1')")
+        v.style.cssText = ("position:fixed;top:0;left:0;width:100%;height:100%;"
+                           "z-index:9999;background:#000;object-fit:contain;")
+        v.src = url
+        js.document.body.appendChild(v)
+        v.play()
+        while v.getAttribute("data-done") != "1":
             await asyncio.sleep(0.1)
-        js.nodo_hide()
+        js.document.body.removeChild(v)
     except Exception as e:
         print("video error:", e)
 
 async def show_online_menu():
-    """Show the restaurant website in a full-screen iframe overlay until dismissed."""
+    """Full-screen iframe of the restaurant website with a Back button overlay."""
     if not IS_WEB:
         return
     try:
-        js.menu_show()
-        while not bool(js.menu_done()):
+        wrap = js.document.createElement("div")
+        wrap.setAttribute("data-done", "0")
+        wrap.style.cssText = ("position:fixed;top:0;left:0;width:100%;height:100%;"
+                              "z-index:9998;background:#fff;")
+
+        iframe = js.document.createElement("iframe")
+        iframe.src = "https://nodoleslieville.ca"
+        iframe.style.cssText = "width:100%;height:100%;border:none;"
+        wrap.appendChild(iframe)
+
+        btn = js.document.createElement("button")
+        btn.textContent = "Back to Menu"
+        btn.style.cssText = ("position:fixed;top:12px;right:12px;z-index:10000;"
+                             "padding:10px 18px;background:rgb(235,196,196);"
+                             "color:rgb(94,80,80);border:none;border-radius:8px;"
+                             "font-size:15px;font-weight:bold;cursor:pointer;")
+        btn.setAttribute("onclick", "document.getElementById('_menu_wrap').setAttribute('data-done','1')")
+        wrap.id = "_menu_wrap"
+        wrap.appendChild(btn)
+
+        js.document.body.appendChild(wrap)
+        while wrap.getAttribute("data-done") != "1":
             await asyncio.sleep(0.2)
-        js.menu_hide()
+        js.document.body.removeChild(wrap)
     except Exception as e:
         print("menu error:", e)
 
