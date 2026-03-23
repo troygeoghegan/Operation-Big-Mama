@@ -529,22 +529,28 @@ def draw_orientation_prompt(screen, dt):
     cx, cy = WIDTH // 2, HEIGHT // 2
     t = time.time()
 
-    # Floating heart accent — large, centre-screen
-    bob = math.sin(t * 1.6) * 8
-    draw_vector_heart(screen, cx, cy - 40 + bob, 4.5, COLOR_BLUSH, 120)
-    draw_vector_heart(screen, cx, cy - 40 + bob, 3.2, COLOR_CARD_BACK, 80)
+    # Rising hearts from the lower screen, drawn BEFORE text so they pass behind it
+    for i in range(7):
+        seed  = i * 1.3
+        speed = 55 + i * 18
+        cycle = (t * speed * 0.01 + seed) % 1.0
+        hx    = cx + math.sin(seed * 2.4 + t * 0.4) * (60 + i * 18)
+        hy    = HEIGHT - cycle * (HEIGHT + 80)
+        size  = 1.2 + math.sin(seed) * 0.6
+        alpha = int(180 * math.sin(cycle * math.pi))
+        color = [COLOR_BLUSH, COLOR_SAGE, COLOR_CARD_BACK][i % 3]
+        draw_vector_heart(screen, hx, hy, size, color, alpha)
 
-    # Title
-    if font_title:
-        draw_soft_text(screen, "Hey Mama!", font_title, COLOR_TEXT, (cx, 110))
-
-    # Sub-title
+    # Text block — centred vertically
     msg_font = font_ui if font_ui else pygame.font.SysFont(None, 28)
-    draw_soft_text(screen, "A little something just for you  🌸", msg_font, COLOR_CARD_BACK, (cx, 168))
+    title_cy    = cy - 50
+    sub_cy      = cy + 30
+    draw_soft_text(screen, "Hey Mama!", font_title, COLOR_TEXT, (cx, title_cy))
+    draw_soft_text(screen, "A little something just for you  🌸", msg_font, COLOR_CARD_BACK, (cx, sub_cy))
 
-    # "Let's Go" button
+    # "Let's Go" button near the bottom
     btn_w, btn_h = 220, 54
-    btn_rect = pygame.Rect(cx - btn_w // 2, HEIGHT - 140, btn_w, btn_h)
+    btn_rect = pygame.Rect(cx - btn_w // 2, HEIGHT - 130, btn_w, btn_h)
     draw_crafted_button(screen, btn_rect, "Let's Go  🌸", msg_font, COLOR_BLUSH)
 
     for event in pygame.event.get(pygame.MOUSEBUTTONDOWN):
