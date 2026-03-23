@@ -532,7 +532,7 @@ def draw_orientation_prompt(screen, dt):
     # Rising hearts from the lower screen, drawn BEFORE text so they pass behind it
     for i in range(7):
         seed  = i * 1.3
-        speed = 55 + i * 18
+        speed = 30 + i * 8
         cycle = (t * speed * 0.01 + seed) % 1.0
         hx    = cx + math.sin(seed * 2.4 + t * 0.4) * (60 + i * 18)
         hy    = HEIGHT - cycle * (HEIGHT + 80)
