@@ -518,6 +518,7 @@ win_animation_start_time = 0
 win_particles = []
 current_question_idx = 0
 prev_game_state_before_landscape = None
+_prompt_start = None
 
 font_title = None
 font_win = None
@@ -525,11 +526,16 @@ font_ui = None
 
 def draw_orientation_prompt(screen, dt):
     """Portrait welcome screen. Returns True when 'Let's Go' is tapped."""
+    global _prompt_start
+    if _prompt_start is None:
+        _prompt_start = time.time()
+
     crafted_bg.draw(screen, dt)
     cx, cy = WIDTH // 2, HEIGHT // 2
-    t = time.time()
+    t     = time.time()
+    elapsed = t - _prompt_start
 
-    # Rising hearts from the lower screen, drawn BEFORE text so they pass behind it
+    # ── Rising hearts (behind text) ──────────────────────────────────────────
     for i in range(7):
         seed  = i * 1.3
         speed = 30 + i * 8
@@ -541,24 +547,110 @@ def draw_orientation_prompt(screen, dt):
         color = [COLOR_BLUSH, COLOR_SAGE, COLOR_CARD_BACK][i % 3]
         draw_vector_heart(screen, hx, hy, size, color, alpha)
 
-    # Text block — centred vertically
-    msg_font = font_ui if font_ui else pygame.font.SysFont(None, 28)
-    title_cy    = cy - 50
-    sub_cy      = cy + 30
-    draw_soft_text(screen, "Hey Mama!", font_title, COLOR_TEXT, (cx, title_cy))
-    draw_soft_text(screen, "A little something just for you  🌸", msg_font, COLOR_CARD_BACK, (cx, sub_cy))
+    msg_font  = font_ui if font_ui else pygame.font.SysFont(None, 28)
+    title_cy  = cy - 50
+    sub_cy    = cy + 30
 
-    # "Let's Go" button near the bottom
+    # ── Typewriter: "Hey Mama!" ───────────────────────────────────────────────
+    FULL_TITLE  = "Hey Mama!"
+    CHAR_DELAY  = 0.10          # seconds per character
+    title_chars = len(FULL_TITLE)
+    n_chars     = min(title_chars, int(elapsed / CHAR_DELAY))
+    title_done  = n_chars >= title_chars
+
+    partial     = FULL_TITLE[:n_chars]
+    full_surf   = font_title.render(FULL_TITLE, True, COLOR_TEXT)
+    full_w      = full_surf.get_width()
+    title_x     = cx - full_w // 2          # left-align within full-title space
+
+    if partial:
+        # Shadow
+        sh = font_title.render(partial, True, COLOR_SHADOW)
+        screen.blit(sh, (title_x + 2, title_cy - sh.get_height() // 2 + 2))
+        ts = font_title.render(partial, True, COLOR_TEXT)
+        screen.blit(ts, (title_x, title_cy - ts.get_height() // 2))
+
+    # Blinking cursor while still typing
+    if not title_done:
+        cursor_visible = math.sin(t * 8) > 0
+        if cursor_visible:
+            partial_w = font_title.render(partial, True, COLOR_TEXT).get_width() if partial else 0
+            cur_x     = title_x + partial_w + 2
+            cur_h     = font_title.get_height()
+            cur_surf  = font_title.render("|", True, COLOR_TEXT)
+            screen.blit(cur_surf, (cur_x, title_cy - cur_h // 2))
+
+    # ── Word swell: "A little something just for you 🌸" ─────────────────────
+    SUBTITLE    = "A little something just for you  \U0001f338"
+    WORD_DELAY  = 0.22          # seconds between each word appearing
+    WORD_SWELL  = 0.18          # duration of the swell animation per word
+    words       = SUBTITLE.split(" ")
+
+    title_finish = title_chars * CHAR_DELAY
+    sub_elapsed  = elapsed - title_finish   # time since title finished
+
+    # Pre-measure full subtitle for centering
+    full_sub_w = msg_font.render(SUBTITLE, True, COLOR_CARD_BACK).get_width()
+    draw_x     = cx - full_sub_w // 2
+    sub_y_top  = sub_cy - msg_font.get_height() // 2
+    cursor_x   = draw_x
+
+    space_w = msg_font.render(" ", True, COLOR_CARD_BACK).get_width()
+
+    for wi, word in enumerate(words):
+        word_start = wi * WORD_DELAY
+        age        = sub_elapsed - word_start
+        if age < 0:
+            break                       # not yet revealed
+
+        word_surf = msg_font.render(word, True, COLOR_CARD_BACK)
+        ww, wh    = word_surf.get_size()
+
+        if age < WORD_SWELL:
+            # Swell: scale 0 → 1.25 → 1.0 with a smooth overshoot
+            p     = age / WORD_SWELL            # 0..1
+            scale = 1.0 + 0.30 * math.sin(p * math.pi)
+            sw    = max(1, int(ww * scale))
+            sh_h  = max(1, int(wh * scale))
+            scaled = pygame.transform.smoothscale(word_surf, (sw, sh_h))
+            wx    = cursor_x + (ww - sw) // 2
+            wy    = sub_y_top + (wh - sh_h) // 2
+            # shadow
+            sh_surf = msg_font.render(word, True, COLOR_SHADOW)
+            sh_sc   = pygame.transform.smoothscale(sh_surf, (sw, sh_h))
+            screen.blit(sh_sc,  (wx + 2, wy + 2))
+            screen.blit(scaled, (wx, wy))
+        else:
+            # Settled — draw normally
+            sh_surf = msg_font.render(word, True, COLOR_SHADOW)
+            screen.blit(sh_surf,  (cursor_x + 2, sub_y_top + 2))
+            screen.blit(word_surf, (cursor_x, sub_y_top))
+
+        cursor_x += ww + space_w
+
+    # ── Button (fades in after animations complete) ───────────────────────────
+    last_word_done = title_finish + (len(words) - 1) * WORD_DELAY + WORD_SWELL
+    btn_alpha      = min(255, int(255 * (elapsed - last_word_done) / 0.4)) if elapsed > last_word_done else 0
+
     btn_w, btn_h = 220, 54
-    btn_rect = pygame.Rect(cx - btn_w // 2, HEIGHT - 130, btn_w, btn_h)
-    draw_crafted_button(screen, btn_rect, "Let's Go  🌸", msg_font, COLOR_BLUSH)
+    btn_rect     = pygame.Rect(cx - btn_w // 2, HEIGHT - 130, btn_w, btn_h)
 
+    if btn_alpha > 0:
+        btn_surf = pygame.Surface((btn_w, btn_h), pygame.SRCALPHA)
+        # Draw button onto temp surface then blit with alpha
+        draw_crafted_button(btn_surf, pygame.Rect(0, 0, btn_w, btn_h), "Let's Go  \U0001f338", msg_font, COLOR_BLUSH)
+        btn_surf.set_alpha(btn_alpha)
+        screen.blit(btn_surf, btn_rect.topleft)
+
+    # Always accept tap (even mid-animation) so user can skip straight through
     for event in pygame.event.get(pygame.MOUSEBUTTONDOWN):
         if btn_rect.collidepoint(event.pos):
+            _prompt_start = None
             return True
     for event in pygame.event.get(pygame.FINGERDOWN):
         fx, fy = int(event.x * WIDTH), int(event.y * HEIGHT)
         if btn_rect.collidepoint(fx, fy):
+            _prompt_start = None
             return True
     return False
 
