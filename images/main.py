@@ -309,26 +309,48 @@ def create_board(images, num_pairs=9):
     return cards
 
 async def play_video_web(url):
-    """Fullscreen HTML5 video over the canvas. Tap anywhere or wait for end."""
+    """Fullscreen video with a tap-to-play overlay (required for mobile autoplay policy)."""
     if not IS_WEB:
         return
     try:
+        wrap = js.document.createElement("div")
+        wrap.id = "_nodo_wrap"
+        wrap.setAttribute("data-done", "0")
+        wrap.style.cssText = ("position:fixed;top:0;left:0;width:100%;height:100%;"
+                              "z-index:9999;background:#000;")
+
         v = js.document.createElement("video")
+        v.id = "_nodo_vid"
         v.setAttribute("playsinline", "")
         v.setAttribute("webkit-playsinline", "")
-        v.setAttribute("data-done", "0")
-        v.setAttribute("onended",     "this.setAttribute('data-done','1')")
-        v.setAttribute("onclick",     "this.setAttribute('data-done','1');this.pause()")
-        v.setAttribute("ontouchstart","this.setAttribute('data-done','1');this.pause()")
-        v.setAttribute("onerror",     "this.setAttribute('data-done','1')")
-        v.style.cssText = ("position:fixed;top:0;left:0;width:100%;height:100%;"
-                           "z-index:9999;background:#000;object-fit:cover;")
+        v.setAttribute("onended",
+            "document.getElementById('_nodo_wrap').setAttribute('data-done','1')")
+        v.setAttribute("onerror",
+            "document.getElementById('_nodo_wrap').setAttribute('data-done','1')")
+        v.style.cssText = "width:100%;height:100%;object-fit:cover;"
         v.src = url
-        js.document.body.appendChild(v)
-        v.play()
-        while v.getAttribute("data-done") != "1":
+        wrap.appendChild(v)
+
+        # Tap-to-play button — play() called directly from JS so it counts as a user gesture
+        tap = js.document.createElement("div")
+        tap.id = "_nodo_tap"
+        tap.style.cssText = ("position:absolute;top:0;left:0;width:100%;height:100%;"
+                             "display:flex;align-items:center;justify-content:center;cursor:pointer;")
+        play_js = ("document.getElementById('_nodo_tap').style.display='none';"
+                   "document.getElementById('_nodo_vid').play()")
+        tap.setAttribute("onclick",     play_js)
+        tap.setAttribute("ontouchstart", play_js)
+
+        icon = js.document.createElement("div")
+        icon.textContent = "\u25b6"
+        icon.style.cssText = "color:rgba(255,255,255,0.85);font-size:80px;pointer-events:none;"
+        tap.appendChild(icon)
+        wrap.appendChild(tap)
+
+        js.document.body.appendChild(wrap)
+        while wrap.getAttribute("data-done") != "1":
             await asyncio.sleep(0.1)
-        js.document.body.removeChild(v)
+        js.document.body.removeChild(wrap)
     except Exception as e:
         print("video error:", e)
 
