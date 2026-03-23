@@ -309,7 +309,7 @@ def create_board(images, num_pairs=9):
     return cards
 
 async def play_video_web(url):
-    """Fullscreen video with NODO logo, tap-to-play, and skip button."""
+    """Fullscreen autoplay video with NODO logo and skip button."""
     if not IS_WEB:
         return
     try:
@@ -322,19 +322,19 @@ async def play_video_web(url):
         wrap.style.cssText = ("position:fixed;top:0;left:0;width:100%;height:100%;"
                               "z-index:9999;background:#000;")
 
-        # Video
+        # Video — autoplay (browser honours this after prior user interaction)
         v = js.document.createElement("video")
         v.id = "_nodo_vid"
-        v.setAttribute("playsinline", "")
+        v.setAttribute("autoplay",        "")
+        v.setAttribute("playsinline",     "")
         v.setAttribute("webkit-playsinline", "")
         v.setAttribute("onended", done_js)
         v.setAttribute("onerror", done_js)
-        v.setAttribute("onplay",  "document.getElementById('_nodo_skip').style.display='block'")
         v.style.cssText = "width:100%;height:100%;object-fit:cover;"
         v.src = url
         wrap.appendChild(v)
 
-        # NODO logo — centred, lower-third of screen, fades in on play
+        # NODO logo — centred, lower-third
         logo = js.document.createElement("img")
         logo.src = LOGO_URL
         logo.style.cssText = ("position:absolute;bottom:100px;left:50%;"
@@ -342,11 +342,11 @@ async def play_video_web(url):
                               "opacity:0.85;pointer-events:none;z-index:10001;")
         wrap.appendChild(logo)
 
-        # Skip button — hidden until video starts
+        # Skip button — visible immediately, bottom centre
         skip = js.document.createElement("button")
         skip.id = "_nodo_skip"
         skip.textContent = "Skip"
-        skip.style.cssText = ("display:none;position:absolute;bottom:36px;left:50%;"
+        skip.style.cssText = ("position:absolute;bottom:36px;left:50%;"
                               "transform:translateX(-50%);padding:10px 40px;"
                               "background:rgba(235,196,196,0.92);color:rgb(94,80,80);"
                               "border:none;border-radius:24px;font-size:17px;"
@@ -354,22 +354,6 @@ async def play_video_web(url):
         skip.setAttribute("onclick",      done_js + ";document.getElementById('_nodo_vid').pause()")
         skip.setAttribute("ontouchstart", done_js + ";document.getElementById('_nodo_vid').pause()")
         wrap.appendChild(skip)
-
-        # Tap-to-play overlay — play() called from JS to satisfy mobile gesture policy
-        tap = js.document.createElement("div")
-        tap.id = "_nodo_tap"
-        tap.style.cssText = ("position:absolute;top:0;left:0;width:100%;height:100%;"
-                             "display:flex;align-items:center;justify-content:center;cursor:pointer;")
-        play_js = ("document.getElementById('_nodo_tap').style.display='none';"
-                   "document.getElementById('_nodo_vid').play()")
-        tap.setAttribute("onclick",      play_js)
-        tap.setAttribute("ontouchstart", play_js)
-
-        icon = js.document.createElement("div")
-        icon.textContent = "\u25b6"
-        icon.style.cssText = "color:rgba(255,255,255,0.85);font-size:80px;pointer-events:none;"
-        tap.appendChild(icon)
-        wrap.appendChild(tap)
 
         js.document.body.appendChild(wrap)
         while wrap.getAttribute("data-done") != "1":
