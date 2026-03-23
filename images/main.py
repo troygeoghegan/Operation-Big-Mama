@@ -551,58 +551,59 @@ def draw_orientation_prompt(screen, dt):
     title_cy  = cy - 50
     sub_cy    = cy + 30
 
-    # ── Handwritten typewriter: "Hey Mama!" ──────────────────────────────────
-    FULL_TITLE  = "Hey Mama!"
-    CHAR_DELAY  = 0.11          # seconds per character
-    TILT_DEG    = -2.8          # slight hand-writing lean
-    title_chars = len(FULL_TITLE)
-    n_chars     = min(title_chars, int(elapsed / CHAR_DELAY))
-    title_done  = n_chars >= title_chars
+    # ── Continuous-stroke handwriting reveal: "Hey Mama!" ────────────────────
+    FULL_TITLE     = "Hey Mama!"
+    WRITE_DURATION = 1.7   # seconds to write the full title
 
-    partial     = FULL_TITLE[:n_chars]
-    full_surf   = font_title.render(FULL_TITLE, True, COLOR_TEXT)
-    full_w      = full_surf.get_width()
-    title_anchor_x = cx - full_w // 2  # left edge stays fixed
+    title_surf  = font_title.render(FULL_TITLE, True, COLOR_TEXT)
+    shadow_surf = font_title.render(FULL_TITLE, True, COLOR_SHADOW)
+    title_w, title_h = title_surf.get_size()
 
-    if partial:
-        ts_raw = font_title.render(partial, True, COLOR_TEXT)
-        sh_raw = font_title.render(partial, True, COLOR_SHADOW)
+    # Smooth eased progress + subtle rhythm wobble (slight decel at
+    # letter-lift points, faster across long strokes)
+    raw_p       = min(1.0, elapsed / WRITE_DURATION)
+    eased       = raw_p * raw_p * (3 - 2 * raw_p)          # smoothstep
+    rhythm      = 0.025 * math.sin(raw_p * 9 * math.pi)    # ~1 micro-pause per letter
+    reveal_frac = max(0.0, min(1.0, eased + rhythm))
+    reveal_px   = int(title_w * reveal_frac)
+    title_done  = raw_p >= 1.0
 
-        # Rotate for handwritten tilt
-        ts_rot = pygame.transform.rotate(ts_raw, TILT_DEG)
-        sh_rot = pygame.transform.rotate(sh_raw, TILT_DEG)
+    title_x = cx - title_w // 2
+    ty      = title_cy - title_h // 2
 
-        # Anchor: left edge of text, vertically centred on title_cy
-        bx = title_anchor_x
-        by = title_cy - ts_rot.get_height() // 2
-        screen.blit(sh_rot, (bx + 2, by + 2))
-        screen.blit(ts_rot, (bx,     by))
+    # Clip-reveal: expose pre-rendered text surface from left to right
+    screen.set_clip(pygame.Rect(title_x + 2, ty + 2, reveal_px, title_h))
+    screen.blit(shadow_surf, (title_x + 2, ty + 2))
+    screen.set_clip(pygame.Rect(title_x, ty, reveal_px, title_h))
+    screen.blit(title_surf,  (title_x, ty))
+    screen.set_clip(None)
 
-        # Ink-dot at the write head — soft blush circle that pulses while typing
-        if not title_done:
-            dot_alpha = int(160 + 80 * math.sin(t * 6))
-            dot_r     = 5
-            dot_x     = title_anchor_x + ts_raw.get_width() + dot_r + 2
-            dot_y     = title_cy
-            dot_surf  = pygame.Surface((dot_r * 2 + 2, dot_r * 2 + 2), pygame.SRCALPHA)
-            pygame.draw.circle(dot_surf, (*COLOR_CARD_BACK, dot_alpha), (dot_r + 1, dot_r + 1), dot_r)
-            screen.blit(dot_surf, (dot_x - dot_r - 1, dot_y - dot_r - 1))
+    # Pen nib — glowing ink dot leading the stroke
+    if not title_done and reveal_px > 0:
+        nib_x = title_x + reveal_px
+        nib_y = title_cy
+        nib   = pygame.Surface((22, 22), pygame.SRCALPHA)
+        pygame.draw.circle(nib, (*COLOR_BLUSH,     55), (11, 11), 10)   # outer aura
+        pygame.draw.circle(nib, (*COLOR_CARD_BACK, 130), (11, 11),  6)  # ink body
+        pygame.draw.circle(nib, (*COLOR_TEXT,      200), (11, 11),  3)  # nib tip
+        pygame.draw.circle(nib, (255, 240, 235,    170), ( 9,  9),  2)  # wet gloss
+        screen.blit(nib, (nib_x - 11, nib_y - 11))
 
-    # ── Decorative underline flourish (after title finishes) ─────────────────
+    # Flourish underline draws itself after title finishes
     if title_done:
-        fl_age   = elapsed - title_chars * CHAR_DELAY
-        fl_prog  = min(1.0, fl_age / 0.35)          # 0 → 1 over 0.35 s
-        fl_len   = int(full_w * 0.72 * fl_prog)
-        fl_x     = title_anchor_x + full_w // 2 - fl_len // 2
-        fl_y     = title_cy + font_title.get_height() // 2 - 4
+        fl_age  = elapsed - WRITE_DURATION
+        fl_prog = min(1.0, fl_age / 0.38)
+        fl_len  = int(title_w * 0.70 * fl_prog)
+        fl_x    = cx - int(title_w * 0.70) // 2
+        fl_y    = ty + title_h - 3
         if fl_len > 2:
-            fl_surf = pygame.Surface((fl_len, 4), pygame.SRCALPHA)
+            fl_surf = pygame.Surface((fl_len, 3), pygame.SRCALPHA)
             for px in range(fl_len):
                 fade = math.sin(px / fl_len * math.pi)
-                a    = int(90 * fade)
-                fl_surf.set_at((px, 0), (*COLOR_BLUSH,  a))
-                fl_surf.set_at((px, 1), (*COLOR_CARD_BACK, int(a * 0.7)))
-                fl_surf.set_at((px, 2), (*COLOR_BLUSH,  int(a * 0.3)))
+                a    = int(85 * fade)
+                fl_surf.set_at((px, 0), (*COLOR_BLUSH,    a))
+                fl_surf.set_at((px, 1), (*COLOR_CARD_BACK, int(a * 0.75)))
+                fl_surf.set_at((px, 2), (*COLOR_BLUSH,    int(a * 0.3)))
             screen.blit(fl_surf, (fl_x, fl_y))
 
     # ── Word swell: "a little something just for you 🌸" ─────────────────────
@@ -611,7 +612,7 @@ def draw_orientation_prompt(screen, dt):
     WORD_SWELL  = 0.22
     words       = SUBTITLE.split(" ")
 
-    title_finish = title_chars * CHAR_DELAY + 0.35   # wait for flourish too
+    title_finish = WRITE_DURATION + 0.32   # brief pause after flourish
     sub_elapsed  = elapsed - title_finish
 
     full_sub_w = msg_font.render(SUBTITLE, True, COLOR_CARD_BACK).get_width()
@@ -624,20 +625,16 @@ def draw_orientation_prompt(screen, dt):
         age = sub_elapsed - wi * WORD_DELAY
         if age < 0:
             break
-
         word_surf = msg_font.render(word, True, COLOR_CARD_BACK)
         ww, wh    = word_surf.get_size()
-
         if age < WORD_SWELL:
-            p     = age / WORD_SWELL                             # 0 → 1
-            # spring: grows past 1 then settles — no cursor, pure swell
+            p     = age / WORD_SWELL
             scale = p * (2 - p) * (1 + 0.28 * math.sin(p * math.pi))
             sw    = max(1, int(ww * scale))
             sh_h  = max(1, int(wh * scale))
             wx    = cursor_x + (ww - sw) // 2
             wy    = sub_y_top + (wh - sh_h) // 2
-            sh_sc = pygame.transform.smoothscale(
-                        msg_font.render(word, True, COLOR_SHADOW), (sw, sh_h))
+            sh_sc = pygame.transform.smoothscale(msg_font.render(word, True, COLOR_SHADOW), (sw, sh_h))
             sc    = pygame.transform.smoothscale(word_surf, (sw, sh_h))
             screen.blit(sh_sc, (wx + 2, wy + 2))
             screen.blit(sc,    (wx,     wy))
@@ -645,24 +642,19 @@ def draw_orientation_prompt(screen, dt):
             sh_surf = msg_font.render(word, True, COLOR_SHADOW)
             screen.blit(sh_surf,  (cursor_x + 2, sub_y_top + 2))
             screen.blit(word_surf, (cursor_x,     sub_y_top))
-
         cursor_x += ww + space_w
 
     # ── Button — bubble swell pop-in ─────────────────────────────────────────
     last_word_done = title_finish + (len(words) - 1) * WORD_DELAY + WORD_SWELL
     btn_w, btn_h   = 220, 54
     btn_cx         = cx
-    btn_cy         = HEIGHT - 103          # vertical centre of button
+    btn_mid_y      = HEIGHT - 103
 
-    swell_t = elapsed - last_word_done
-    if swell_t >= 0:
-        p          = min(1.0, swell_t / 0.45)
-        # smooth spring: 0 → overshoot ~1.18 → settle 1.0
-        btn_scale  = p * (2 - p) * (1 + 0.22 * math.sin(p * math.pi))
-    else:
-        btn_scale  = 0.0
+    swell_t   = elapsed - last_word_done
+    p_btn     = min(1.0, max(0.0, swell_t / 0.45))
+    btn_scale = p_btn * (2 - p_btn) * (1 + 0.22 * math.sin(p_btn * math.pi)) if swell_t >= 0 else 0.0
 
-    btn_rect = pygame.Rect(btn_cx - btn_w // 2, btn_cy - btn_h // 2, btn_w, btn_h)
+    btn_rect = pygame.Rect(btn_cx - btn_w // 2, btn_mid_y - btn_h // 2, btn_w, btn_h)
 
     if btn_scale > 0.01:
         sw = max(1, int(btn_w * btn_scale))
@@ -671,9 +663,8 @@ def draw_orientation_prompt(screen, dt):
         draw_crafted_button(btn_surf, pygame.Rect(0, 0, btn_w, btn_h),
                             "Let's Go  \U0001f338", msg_font, COLOR_BLUSH)
         scaled_btn = pygame.transform.smoothscale(btn_surf, (sw, sh))
-        screen.blit(scaled_btn, (btn_cx - sw // 2, btn_cy - sh // 2))
+        screen.blit(scaled_btn, (btn_cx - sw // 2, btn_mid_y - sh // 2))
 
-    # Accept tap at any point so user can skip through animations
     for event in pygame.event.get(pygame.MOUSEBUTTONDOWN):
         if btn_rect.collidepoint(event.pos):
             _prompt_start = None
