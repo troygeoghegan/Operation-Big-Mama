@@ -308,6 +308,18 @@ def create_board(images, num_pairs=9):
         })
     return cards
 
+async def play_video_web(url):
+    """Play an HTML5 video overlay via JS bridge, yield until it ends or is tapped."""
+    if not IS_WEB:
+        return
+    try:
+        js.window.show_nodo_video(url)
+        while not js.window.is_nodo_video_done():
+            await asyncio.sleep(0.1)
+        js.window.hide_nodo_video()
+    except Exception as e:
+        print("play_video_web error:", e)
+
 async def play_video(filepath):
     if not HAS_VIDEO_LIB: return False
     skipped = False
@@ -1174,7 +1186,7 @@ async def _main():
         elif game_state == GameState.TRANSITION_TO_REWARD:
             if draw_transition_to_reward(screen, dt, transition_start_time, transition_particles):
                 if selected_idx in [1, 2]:  # Massage & Dinner both use the video reward flow
-                    if nodo_video_path and HAS_VIDEO_LIB:
+                    if IS_WEB or (nodo_video_path and HAS_VIDEO_LIB):
                         game_state = GameState.PLAY_VIDEO_REWARD
                     elif nodo_image is not None:
                         game_state = GameState.NODO_REVEAL
@@ -1191,20 +1203,29 @@ async def _main():
                     selected_idx = None
 
         elif game_state == GameState.PLAY_VIDEO_REWARD:
-            skipped = await play_video(nodo_video_path)
-            if skipped:
-                game_state = GameState.PDF_VIEWER
-                pdf_scroll_y = 0
-            elif nodo_image is not None:
-                game_state = GameState.NODO_REVEAL
-                nodo_start_time = time.time()
-            else:
+            if IS_WEB:
+                await play_video_web("https://troygeoghegan.github.io/Operation-Big-Mama/nodo.mp4")
                 game_state = GameState.WON
                 scroll_y = 0
                 win_animation_start_time = time.time()
                 win_particles = [{"x": random.randint(0, WIDTH), "y": random.randint(0, HEIGHT),
                                   "size": random.uniform(1.0, 3.0), "speed": random.uniform(100, 200),
                                   "seed": random.random(), "color": random.choice([COLOR_SOFT_PINK, COLOR_ROSE_GOLD, COLOR_CREAM])} for _ in range(40)]
+            else:
+                skipped = await play_video(nodo_video_path)
+                if skipped:
+                    game_state = GameState.PDF_VIEWER
+                    pdf_scroll_y = 0
+                elif nodo_image is not None:
+                    game_state = GameState.NODO_REVEAL
+                    nodo_start_time = time.time()
+                else:
+                    game_state = GameState.WON
+                    scroll_y = 0
+                    win_animation_start_time = time.time()
+                    win_particles = [{"x": random.randint(0, WIDTH), "y": random.randint(0, HEIGHT),
+                                      "size": random.uniform(1.0, 3.0), "speed": random.uniform(100, 200),
+                                      "seed": random.random(), "color": random.choice([COLOR_SOFT_PINK, COLOR_ROSE_GOLD, COLOR_CREAM])} for _ in range(40)]
 
         elif game_state == GameState.PDF_VIEWER:
             pdf_close_rect = draw_pdf_viewer(screen, pdf_surface, pdf_surface_height, pdf_scroll_y)
