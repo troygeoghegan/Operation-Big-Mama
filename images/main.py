@@ -891,11 +891,16 @@ def draw_won_gameover(screen, dt, game_state_val, selected_idx, win_animation_st
             menu_button_rect = pygame.Rect(WIDTH - 120, HEIGHT - 60, 100, 40)
             draw_crafted_button(screen, menu_button_rect, "Menu", font_ui, COLOR_BLUSH)
         else:
-            avail_h = HEIGHT - 200
+            # wrap the reward message so it never overflows the 450px canvas
+            msg_lines = wrap_text(msg, font_win, WIDTH - 30)
+            line_h = font_win.get_height()
+            msg_block_h = line_h * len(msg_lines)
+            img_top = msg_block_h + 20
+
+            avail_h = HEIGHT - img_top - 80
             base_scale = min(1.0, avail_h / current_img.get_height(), (WIDTH - 40) / current_img.get_width())
             base_w, base_h = int(current_img.get_width() * base_scale), int(current_img.get_height() * base_scale)
             curr_w, curr_h = int(base_w * eased_progress), int(base_h * eased_progress)
-            img_top = 100
 
             if curr_w > 0 and curr_h > 0:
                 pad = 15
@@ -906,9 +911,14 @@ def draw_won_gameover(screen, dt, game_state_val, selected_idx, win_animation_st
                 screen.blit(scaled_img, (img_x, img_y))
 
             if progress >= 1.0:
-                txt = font_win.render(msg, True, COLOR_TEXT)
-                screen.blit(txt, (WIDTH//2 - txt.get_width()//2, 35))
-                
+                msg_y = 10
+                for line in msg_lines:
+                    shadow = font_win.render(line, True, COLOR_SHADOW)
+                    screen.blit(shadow, (WIDTH//2 - shadow.get_width()//2 + 2, msg_y + 2))
+                    line_surf = font_win.render(line, True, COLOR_TEXT)
+                    screen.blit(line_surf, (WIDTH//2 - line_surf.get_width()//2, msg_y))
+                    msg_y += line_h
+
                 menu_button_rect = pygame.Rect(WIDTH//2 - 100, HEIGHT - 60, 200, 40)
                 btn_label = "Booked for 2pm" if selected_idx == 1 else "Momma's Menu"
                 draw_crafted_button(screen, menu_button_rect, btn_label, font_ui, COLOR_BLUSH)
