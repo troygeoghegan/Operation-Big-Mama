@@ -320,6 +320,18 @@ async def play_video_web(url):
     except Exception as e:
         print("video error:", e)
 
+async def show_online_menu():
+    """Show the restaurant website in a full-screen iframe overlay until dismissed."""
+    if not IS_WEB:
+        return
+    try:
+        js.menu_show()
+        while not bool(js.menu_done()):
+            await asyncio.sleep(0.2)
+        js.menu_hide()
+    except Exception as e:
+        print("menu error:", e)
+
 async def play_video(filepath):
     if not HAS_VIDEO_LIB: return False
     skipped = False
@@ -1205,9 +1217,10 @@ async def _main():
         elif game_state == GameState.PLAY_VIDEO_REWARD:
             if IS_WEB:
                 await play_video_web("https://troygeoghegan.github.io/Operation-Big-Mama/nodo.mp4")
-                if selected_idx == 2:  # dinner → show the restaurant menu
-                    game_state = GameState.PDF_VIEWER
-                    pdf_scroll_y = 0
+                if selected_idx == 2:  # dinner → show the live restaurant menu, then return
+                    await show_online_menu()
+                    game_state = GameState.MENU
+                    selected_idx = None
                 else:
                     game_state = GameState.WON
                     scroll_y = 0
