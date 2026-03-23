@@ -1205,12 +1205,16 @@ async def _main():
         elif game_state == GameState.PLAY_VIDEO_REWARD:
             if IS_WEB:
                 await play_video_web("https://troygeoghegan.github.io/Operation-Big-Mama/nodo.mp4")
-                game_state = GameState.WON
-                scroll_y = 0
-                win_animation_start_time = time.time()
-                win_particles = [{"x": random.randint(0, WIDTH), "y": random.randint(0, HEIGHT),
-                                  "size": random.uniform(1.0, 3.0), "speed": random.uniform(100, 200),
-                                  "seed": random.random(), "color": random.choice([COLOR_SOFT_PINK, COLOR_ROSE_GOLD, COLOR_CREAM])} for _ in range(40)]
+                if selected_idx == 2:  # dinner → show the restaurant menu
+                    game_state = GameState.PDF_VIEWER
+                    pdf_scroll_y = 0
+                else:
+                    game_state = GameState.WON
+                    scroll_y = 0
+                    win_animation_start_time = time.time()
+                    win_particles = [{"x": random.randint(0, WIDTH), "y": random.randint(0, HEIGHT),
+                                      "size": random.uniform(1.0, 3.0), "speed": random.uniform(100, 200),
+                                      "seed": random.random(), "color": random.choice([COLOR_SOFT_PINK, COLOR_ROSE_GOLD, COLOR_CREAM])} for _ in range(40)]
             else:
                 skipped = await play_video(nodo_video_path)
                 if skipped:
@@ -1263,7 +1267,7 @@ async def _main():
                 mx, my = pygame.mouse.get_pos()
                 if game_state == GameState.MENU:
                     for i in range(3):
-                        if pygame.Rect(WIDTH//2 - 160, 170 + i*75, 320, 60).collidepoint(mx, my): 
+                        if pygame.Rect(WIDTH//2 - 160, HEIGHT//2 - 110 + i*90, 320, 60).collidepoint(mx, my):
                             selected_idx = i
                             if options[selected_idx].get("type") == "trivia":
                                 if pending_trivia_questions:
