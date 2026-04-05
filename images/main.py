@@ -230,10 +230,20 @@ def draw_crafted_button(screen, rect, text, font, base_color):
     pygame.draw.rect(screen, base_color,   btn, border_radius=r)
     # Outline
     pygame.draw.rect(screen, COLOR_OUTLINE, btn, 4, border_radius=r)
-    # Shine
-    sh = pygame.Surface((max(1, btn.width-24), max(1, btn.height//3)), pygame.SRCALPHA)
-    sh.fill((255, 255, 255, 70))
-    screen.blit(sh, (btn.x+12, btn.y+7))
+    # Vertical gradient: light top → transparent bottom
+    grad_w = max(1, btn.width - 8)
+    grad_h = max(1, btn.height)
+    grad = pygame.Surface((grad_w, grad_h), pygame.SRCALPHA)
+    for gy in range(grad_h):
+        t_g = gy / grad_h
+        # top half brightens, bottom half darkens
+        if t_g < 0.45:
+            a = int(110 * (1 - t_g / 0.45))
+            grad.fill((255, 255, 255, a), (0, gy, grad_w, 1))
+        else:
+            a = int(60 * ((t_g - 0.45) / 0.55))
+            grad.fill((0, 0, 0, a), (0, gy, grad_w, 1))
+    screen.blit(grad, (btn.x + 4, btn.y))
 
     lines = wrap_text(text, font, btn.width - 20)
     line_h = font.get_height()
@@ -915,6 +925,21 @@ def draw_landscape_ready(screen, dt, elapsed):
             screen.blit(s, (cx - s.get_width()//2, yo))
 
 
+def _render_scaled_outlined(surf, text, font, scale, color, cx, cy):
+    """Render `text` in `font` scaled to `scale` fraction, with dark outline."""
+    ts = font.render(text, True, color)
+    os_ = font.render(text, True, COLOR_OUTLINE)
+    nw = max(1, int(ts.get_width() * scale))
+    nh = max(1, int(ts.get_height() * scale))
+    ts  = pygame.transform.smoothscale(ts,  (nw, nh))
+    os_ = pygame.transform.smoothscale(os_, (nw, nh))
+    ow = 3
+    for ddx in (-ow, 0, ow):
+        for ddy in (-ow, 0, ow):
+            if ddx or ddy:
+                surf.blit(os_, (cx - nw//2 + ddx, cy - nh//2 + ddy))
+    surf.blit(ts, (cx - nw//2, cy - nh//2))
+
 def _draw_menu_scene(surf, t):
     """Mother's Day illustration: sun, rainbow, big flowers, floating hearts."""
     # ── Sun top-right ────────────────────────────────────────────────────────
@@ -932,16 +957,30 @@ def _draw_menu_scene(surf, t):
     pygame.draw.circle(surf, COLOR_YELLOW,  (sun_x, sun_y), sun_r)
     pygame.draw.circle(surf, (255, 245, 150), (sun_x - 10, sun_y - 10), sun_r // 3)
 
-    # ── Rainbow ──────────────────────────────────────────────────────────────
-    r_cols = [(255,80,80),(255,160,0),(255,230,0),(80,200,80),(80,140,255),(180,80,255)]
-    arc_cx, arc_cy = WIDTH // 2, int(HEIGHT * 0.56)
+    # ── Rainbow — thick bubbly bands drawn as circle chains ─────────────────
+    r_cols  = [(255,80,80),(255,160,0),(255,230,0),(80,200,80),(80,140,255),(180,80,255)]
+    arc_cx  = int(WIDTH * 0.38)
+    arc_cy  = int(HEIGHT * 0.60)
+    band_r  = 10          # radius of each circle in the chain
+    spacing = 7           # degrees between circles
     for ri, rc in enumerate(r_cols):
-        rr = 100 + ri * 13
-        s  = pygame.Surface((rr * 2 + 8, rr + 8), pygame.SRCALPHA)
-        pygame.draw.arc(s, (*rc, 160),
-                        pygame.Rect(4, 4, rr * 2, rr * 2),
-                        math.radians(8), math.radians(172), 9)
-        surf.blit(s, (arc_cx - rr - 4, arc_cy - rr - 4))
+        rr = 82 + ri * (band_r * 2 + 3)
+        # dark outline ring first
+        for ang in range(10, 171, spacing):
+            rad = math.radians(ang)
+            cx2 = int(arc_cx + math.cos(rad) * rr)
+            cy2 = int(arc_cy - math.sin(rad) * rr)
+            pygame.draw.circle(surf, COLOR_OUTLINE, (cx2, cy2), band_r + 2)
+        # colour fill on top
+        for ang in range(10, 171, spacing):
+            rad = math.radians(ang)
+            cx2 = int(arc_cx + math.cos(rad) * rr)
+            cy2 = int(arc_cy - math.sin(rad) * rr)
+            pygame.draw.circle(surf, rc, (cx2, cy2), band_r)
+            # shine dot top-left
+            pygame.draw.circle(surf, (255,255,255),
+                               (cx2 - band_r//3, cy2 - band_r//3),
+                               max(1, band_r // 3))
 
     # ── Big foreground flowers ────────────────────────────────────────────────
     h3y = int(HEIGHT * 0.72)
@@ -991,10 +1030,10 @@ def draw_menu(screen, dt, selected_idx, completed_games):
     lockup_cy = int(HEIGHT * 0.26)
     cx        = WIDTH // 2
 
-    # Row heights
-    r_happy = font_title.get_height()
+    # Row heights — happy/day are _fhuge scaled down
     r_mama  = _fhuge.get_height()
-    r_day   = font_win.get_height()
+    r_happy = int(r_mama * 0.40)
+    r_day   = int(r_mama * 0.38)
     gap     = 4
     total_h = r_happy + gap + r_mama + gap + r_day
 
@@ -1002,9 +1041,9 @@ def draw_menu(screen, dt, selected_idx, completed_games):
     y_mama  = y_happy + r_happy + gap
     y_day   = y_mama  + r_mama  + gap
 
-    # ── "Happy" — small, white, centred ──────────────────────────────────────
-    draw_soft_text(screen, "Happy", font_title, COLOR_CREAM,
-                   (cx, y_happy + r_happy // 2), WIDTH - 20)
+    # ── "Happy" — same font as MAMA but scaled down to ~40% ─────────────────
+    _render_scaled_outlined(screen, "Happy", _fhuge, 0.40, COLOR_CREAM,
+                            cx, y_happy + r_happy // 2)
 
     # ── "MAMA" — each letter individually, bouncing + alternating pink/gold ──
     letters      = "MAMA"
@@ -1031,9 +1070,9 @@ def draw_menu(screen, dt, selected_idx, completed_games):
         screen.blit(shine_s, (lx + lw // 6, ly + lh // 8))
         lx += lw + 2
 
-    # ── "Day ♥" — small, gold, centred ───────────────────────────────────────
-    draw_soft_text(screen, "Day  \u2665", font_win, COLOR_YELLOW,
-                   (cx, y_day + r_day // 2), WIDTH - 40)
+    # ── "Day ♥" — same font as MAMA scaled to ~38%, gold ────────────────────
+    _render_scaled_outlined(screen, "Day  \u2665", _fhuge, 0.38, COLOR_YELLOW,
+                            cx, y_day + r_day // 2)
 
     # Pulsing stars beside the lockup
     for i, (sx, sy, sr) in enumerate([
