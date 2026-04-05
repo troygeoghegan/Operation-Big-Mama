@@ -917,19 +917,70 @@ def draw_landscape_ready(screen, dt, elapsed):
 def draw_menu(screen, dt, selected_idx, completed_games):
     crafted_bg.draw(screen, dt)
 
-    # ── Title banner ─────────────────────────────────────────────────────────
-    bw, bh = WIDTH - 24, 88
-    bx, by = 12, 12
-    _draw_banner(screen, pygame.Rect(bx, by, bw, bh))
-    # Small stars on banner ends
-    _draw_star(screen, bx+20,    by+bh//2, 6, COLOR_YELLOW)
-    _draw_star(screen, bx+bw-20, by+bh//2, 6, COLOR_YELLOW)
-    draw_soft_text(screen, "Happy Mama Day", font_title, COLOR_CREAM,
-                   (WIDTH//2, by+bh//2), WIDTH-72)
+    # ── Stylized title banner ────────────────────────────────────────────────
+    bx, by   = 8, 8
+    bw       = WIDTH - 16
+    line1_h  = font_title.get_height()
+    line2_h  = font_win.get_height()
+    pad_top  = 14
+    pad_bot  = 18
+    scallop  = 14          # scalloped bottom bump radius
+    bh       = pad_top + line1_h + 6 + line2_h + pad_bot + scallop
+
+    # Drop shadow
+    pygame.draw.rect(screen, (0, 0, 0),
+                     (bx+6, by+8, bw, bh - scallop), border_radius=22)
+
+    # Main body (flat bottom — scallops drawn over it)
+    pygame.draw.rect(screen, COLOR_BLUSH,
+                     (bx, by, bw, bh - scallop), border_radius=22)
+
+    # Scalloped bottom edge — row of overlapping circles
+    n_scallops = bw // (scallop * 2 - 2)
+    scallop_y  = by + bh - scallop * 2 + 4
+    for k in range(n_scallops + 1):
+        sx = bx + k * (bw / max(1, n_scallops))
+        pygame.draw.circle(screen, COLOR_BLUSH, (int(sx), scallop_y + scallop), scallop)
+
+    # Outline over whole banner shape
+    pygame.draw.rect(screen, COLOR_OUTLINE,
+                     (bx, by, bw, bh - scallop), 4, border_radius=22)
+    for k in range(n_scallops + 1):
+        sx = bx + k * (bw / max(1, n_scallops))
+        pygame.draw.circle(screen, COLOR_OUTLINE, (int(sx), scallop_y + scallop), scallop, 3)
+
+    # Shine strip
+    shine = pygame.Surface((max(1, bw - 28), 16), pygame.SRCALPHA)
+    shine.fill((255, 255, 255, 70))
+    screen.blit(shine, (bx + 14, by + 10))
+
+    # Line 1 — "Happy Mama" (larger, Fredoka)
+    ty1 = by + pad_top + line1_h // 2
+    draw_soft_text(screen, "Happy Mama", font_title, COLOR_CREAM,
+                   (WIDTH // 2, ty1), bw - 20)
+
+    # Line 2 — "Day  ♡" (slightly smaller, win font)
+    ty2 = ty1 + line1_h // 2 + 6 + line2_h // 2
+    draw_soft_text(screen, "Day  \u2665", font_win, COLOR_YELLOW,
+                   (WIDTH // 2, ty2), bw - 40)
+
+    # Decorative stars at banner corners
+    _draw_star(screen, bx + 22,      by + 22,      8, COLOR_YELLOW)
+    _draw_star(screen, bx + bw - 22, by + 22,      8, COLOR_YELLOW)
+    _draw_star(screen, bx + 14,      by + bh - 30, 5, COLOR_CREAM)
+    _draw_star(screen, bx + bw - 14, by + bh - 30, 5, COLOR_CREAM)
+
+    # Small floating hearts beside "Day"
+    t = time.time()
+    for i, hx_off in enumerate([-bw//2 + 18, bw//2 - 18]):
+        bob = math.sin(t * 2.2 + i * 1.8) * 4
+        draw_vector_heart(screen, WIDTH//2 + hx_off, int(ty2 + bob), 1.1, COLOR_CREAM, 210)
+
+    bh_total = bh
 
     # ── Buttons ───────────────────────────────────────────────────────────────
-    BTN_COLORS = [(100, 196, 248), COLOR_BLUSH, (255, 185, 0)]   # blue / pink / gold
-    btn_top = by + bh + 24
+    BTN_COLORS = [(100, 196, 248), COLOR_BLUSH, (255, 185, 0)]
+    btn_top = by + bh_total + 18
     for i, opt in enumerate(options):
         rect = pygame.Rect(WIDTH//2 - 148, btn_top + i*88, 296, 66)
         col  = COLOR_BLUSH if i == selected_idx else BTN_COLORS[i % 3]
@@ -1648,7 +1699,10 @@ async def _main():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = pygame.mouse.get_pos()
                 if game_state == GameState.MENU:
-                    btn_top = 12 + 88 + 24   # banner y + banner h + gap
+                    _l1h = font_title.get_height() if font_title else 52
+                    _l2h = font_win.get_height()   if font_win   else 40
+                    _bh  = 14 + _l1h + 6 + _l2h + 18 + 14   # pad_top+l1+gap+l2+pad_bot+scallop
+                    btn_top = 8 + _bh + 18
                     for i in range(3):
                         if pygame.Rect(WIDTH//2 - 148, btn_top + i*88, 296, 66).collidepoint(mx, my):
                             selected_idx = i
