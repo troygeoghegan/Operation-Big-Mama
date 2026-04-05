@@ -653,6 +653,7 @@ _prompt_start = None
 font_title = None
 font_win = None
 font_ui = None
+font_huge = None    # extra-large Fredoka for MAMA hero word
 
 def draw_orientation_prompt(screen, dt):
     """Portrait welcome screen. Returns True when 'Let's Go' is tapped."""
@@ -984,34 +985,63 @@ def draw_menu(screen, dt, selected_idx, completed_games):
     # Full-screen Mother's Day illustration
     _draw_menu_scene(screen, t)
 
-    # ── "Happy Mama Day" — large title floating in the sky ────────────────────
-    title_cy = int(HEIGHT * 0.22)
+    # ── Title lockup: "Happy" / "MAMA" / "Day ♥" ─────────────────────────────
+    #   Small word → HUGE hero word → small word  (like the reference)
+    lockup_cy = int(HEIGHT * 0.26)
+    cx        = WIDTH // 2
 
-    # Soft white glow plate so text reads on any sky colour
-    glow_w = WIDTH - 16
-    glow_h = font_title.get_height() * 2 + font_win.get_height() + 20
-    glow = pygame.Surface((glow_w, glow_h), pygame.SRCALPHA)
-    pygame.draw.ellipse(glow, (255, 255, 255, 45), glow.get_rect())
-    screen.blit(glow, (8, title_cy - glow_h // 2))
+    # Row heights
+    r_happy = font_title.get_height()
+    r_mama  = font_huge.get_height()
+    r_day   = font_win.get_height()
+    gap     = 4
+    total_h = r_happy + gap + r_mama + gap + r_day
 
-    # "Happy Mama" — white with dark outline
-    draw_soft_text(screen, "Happy Mama", font_title, COLOR_CREAM,
-                   (WIDTH // 2, title_cy - font_title.get_height() // 2),
-                   WIDTH - 16)
+    y_happy = lockup_cy - total_h // 2
+    y_mama  = y_happy + r_happy + gap
+    y_day   = y_mama  + r_mama  + gap
 
-    # "Day!" — gold, slightly smaller
-    draw_soft_text(screen, "Day!", font_title, COLOR_YELLOW,
-                   (WIDTH // 2, title_cy + font_title.get_height() // 2 + 4),
-                   WIDTH - 16)
+    # ── "Happy" — small, white, centred ──────────────────────────────────────
+    draw_soft_text(screen, "Happy", font_title, COLOR_CREAM,
+                   (cx, y_happy + r_happy // 2), WIDTH - 20)
 
-    # Stars orbiting the title
+    # ── "MAMA" — each letter individually, bouncing + alternating pink/gold ──
+    letters      = "MAMA"
+    alt_cols     = [COLOR_BLUSH, COLOR_YELLOW, COLOR_BLUSH, COLOR_YELLOW]
+    letter_surfs = [font_huge.render(l, True, c) for l, c in zip(letters, alt_cols)]
+    out_surfs    = [font_huge.render(l, True, COLOR_OUTLINE) for l in letters]
+    total_lw     = sum(s.get_width() for s in letter_surfs) + 2 * (len(letters) - 1)
+    lx           = cx - total_lw // 2
+    ow            = 4   # outline width
+    for idx, (ls, os_) in enumerate(zip(letter_surfs, out_surfs)):
+        bob  = int(math.sin(t * 2.8 + idx * 1.1) * 7)
+        ly   = y_mama + bob
+        lw   = ls.get_width()
+        lh   = ls.get_height()
+        # Dark outline — 8 directions
+        for ddx in (-ow, 0, ow):
+            for ddy in (-ow, 0, ow):
+                if ddx or ddy:
+                    screen.blit(os_, (lx + ddx, ly + ddy))
+        screen.blit(ls, (lx, ly))
+        # Shine spot top-left of each letter
+        shine_s = pygame.Surface((max(1, lw // 3), max(1, lh // 5)), pygame.SRCALPHA)
+        shine_s.fill((255, 255, 255, 80))
+        screen.blit(shine_s, (lx + lw // 6, ly + lh // 8))
+        lx += lw + 2
+
+    # ── "Day ♥" — small, gold, centred ───────────────────────────────────────
+    draw_soft_text(screen, "Day  \u2665", font_win, COLOR_YELLOW,
+                   (cx, y_day + r_day // 2), WIDTH - 40)
+
+    # Pulsing stars beside the lockup
     for i, (sx, sy, sr) in enumerate([
-        (WIDTH // 2 - 150, title_cy - 30, 8),
-        (WIDTH // 2 + 150, title_cy - 30, 8),
-        (WIDTH // 2 - 120, title_cy + 44, 6),
-        (WIDTH // 2 + 120, title_cy + 44, 6),
+        (cx - 162, y_happy + r_happy // 2, 7),
+        (cx + 162, y_happy + r_happy // 2, 7),
+        (cx - 148, y_day   + r_day   // 2, 5),
+        (cx + 148, y_day   + r_day   // 2, 5),
     ]):
-        pulse = 1.0 + 0.25 * math.sin(t * 3 + i * 1.5)
+        pulse = 1.0 + 0.3 * math.sin(t * 2.5 + i * 1.4)
         _draw_star(screen, sx, sy, int(sr * pulse), COLOR_YELLOW)
 
     # ── Buttons pinned to bottom ──────────────────────────────────────────────
@@ -1563,9 +1593,11 @@ async def _main():
     try:
         font_title = pygame.font.Font(fredoka, 54) if fredoka else pygame.font.SysFont(None, 52)
         font_win   = pygame.font.Font(fredoka, 40) if fredoka else pygame.font.SysFont(None, 40)
+        font_huge  = pygame.font.Font(titan,   92) if titan   else pygame.font.SysFont(None, 88)
     except:
         font_title = pygame.font.SysFont(None, 52)
         font_win   = pygame.font.SysFont(None, 40)
+        font_huge  = pygame.font.SysFont(None, 88)
 
     try:
         font_ui = pygame.font.Font(titan, 22) if titan else pygame.font.SysFont(None, 24)
