@@ -987,12 +987,13 @@ def draw_menu(screen, dt, selected_idx, completed_games):
 
     # ── Title lockup: "Happy" / "MAMA" / "Day ♥" ─────────────────────────────
     #   Small word → HUGE hero word → small word  (like the reference)
+    _fhuge    = font_huge if font_huge else font_title
     lockup_cy = int(HEIGHT * 0.26)
     cx        = WIDTH // 2
 
     # Row heights
     r_happy = font_title.get_height()
-    r_mama  = font_huge.get_height()
+    r_mama  = _fhuge.get_height()
     r_day   = font_win.get_height()
     gap     = 4
     total_h = r_happy + gap + r_mama + gap + r_day
@@ -1008,8 +1009,8 @@ def draw_menu(screen, dt, selected_idx, completed_games):
     # ── "MAMA" — each letter individually, bouncing + alternating pink/gold ──
     letters      = "MAMA"
     alt_cols     = [COLOR_BLUSH, COLOR_YELLOW, COLOR_BLUSH, COLOR_YELLOW]
-    letter_surfs = [font_huge.render(l, True, c) for l, c in zip(letters, alt_cols)]
-    out_surfs    = [font_huge.render(l, True, COLOR_OUTLINE) for l in letters]
+    letter_surfs = [_fhuge.render(l, True, c) for l, c in zip(letters, alt_cols)]
+    out_surfs    = [_fhuge.render(l, True, COLOR_OUTLINE) for l in letters]
     total_lw     = sum(s.get_width() for s in letter_surfs) + 2 * (len(letters) - 1)
     lx           = cx - total_lw // 2
     ow            = 4   # outline width
@@ -1455,7 +1456,7 @@ async def main():
 
 async def _main():
     global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape
-    global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui
+    global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui, font_huge
 
     pygame.display.init()
     pygame.font.init()
