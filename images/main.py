@@ -914,59 +914,113 @@ def draw_landscape_ready(screen, dt, elapsed):
             screen.blit(s, (cx - s.get_width()//2, yo))
 
 
+def _draw_menu_scene(surf, t):
+    """Mother's Day illustration: sun, rainbow, big flowers, floating hearts."""
+    # ── Sun top-right ────────────────────────────────────────────────────────
+    sun_x, sun_y, sun_r = int(WIDTH * 0.82), 72, 36
+    for ang in range(0, 360, 30):
+        rad = math.radians(ang + t * 15)
+        rlen = sun_r + 16 + int(math.sin(t * 2.5 + ang) * 4)
+        x1 = int(sun_x + math.cos(rad) * (sun_r + 5))
+        y1 = int(sun_y + math.sin(rad) * (sun_r + 5))
+        x2 = int(sun_x + math.cos(rad) * rlen)
+        y2 = int(sun_y + math.sin(rad) * rlen)
+        pygame.draw.line(surf, COLOR_OUTLINE, (x1, y1), (x2, y2), 3)
+        pygame.draw.line(surf, COLOR_YELLOW,  (x1, y1), (x2, y2), 2)
+    pygame.draw.circle(surf, COLOR_OUTLINE, (sun_x, sun_y), sun_r + 3)
+    pygame.draw.circle(surf, COLOR_YELLOW,  (sun_x, sun_y), sun_r)
+    pygame.draw.circle(surf, (255, 245, 150), (sun_x - 10, sun_y - 10), sun_r // 3)
+
+    # ── Rainbow ──────────────────────────────────────────────────────────────
+    r_cols = [(255,80,80),(255,160,0),(255,230,0),(80,200,80),(80,140,255),(180,80,255)]
+    arc_cx, arc_cy = WIDTH // 2, int(HEIGHT * 0.56)
+    for ri, rc in enumerate(r_cols):
+        rr = 100 + ri * 13
+        s  = pygame.Surface((rr * 2 + 8, rr + 8), pygame.SRCALPHA)
+        pygame.draw.arc(s, (*rc, 160),
+                        pygame.Rect(4, 4, rr * 2, rr * 2),
+                        math.radians(8), math.radians(172), 9)
+        surf.blit(s, (arc_cx - rr - 4, arc_cy - rr - 4))
+
+    # ── Big foreground flowers ────────────────────────────────────────────────
+    h3y = int(HEIGHT * 0.72)
+    flowers = [
+        (int(WIDTH * 0.10), h3y - 28, 11, [(255,120,170),(255,240,0)]),
+        (int(WIDTH * 0.28), h3y - 50, 13, [(255,255,255),(255,210,0)]),
+        (int(WIDTH * 0.50), h3y - 36, 10, [(255,190,80), (255,130,0)]),
+        (int(WIDTH * 0.72), h3y - 52, 14, [(255,120,170),(255,240,0)]),
+        (int(WIDTH * 0.90), h3y - 26, 10, [(255,255,255),(255,210,0)]),
+    ]
+    for fx, fy, fsz, (pc, cc) in flowers:
+        pygame.draw.line(surf, COLOR_GRASS_DARK, (fx, fy), (fx, fy + fsz * 3),
+                         max(2, fsz // 4))
+        for ang in range(0, 360, 45):
+            rad = math.radians(ang)
+            pygame.draw.circle(surf, COLOR_OUTLINE,
+                               (int(fx + math.cos(rad) * (fsz+2)),
+                                int(fy + math.sin(rad) * (fsz+2))), fsz+1)
+            pygame.draw.circle(surf, pc,
+                               (int(fx + math.cos(rad) * (fsz+1)),
+                                int(fy + math.sin(rad) * (fsz+1))), fsz)
+        pygame.draw.circle(surf, COLOR_OUTLINE, (fx, fy), fsz // 2 + 2)
+        pygame.draw.circle(surf, cc,            (fx, fy), fsz // 2)
+
+    # ── Floating hearts rising through the sky ────────────────────────────────
+    heart_cols = [COLOR_BLUSH, COLOR_YELLOW, COLOR_CREAM, (255,160,200), COLOR_BLUSH]
+    for i in range(5):
+        seed  = i * 1.7
+        hx    = int(WIDTH * (0.12 + i * 0.19))
+        cycle = (t * 0.38 + seed) % 1.0
+        hy    = int(HEIGHT * 0.58 - cycle * HEIGHT * 0.48)
+        alpha = int(210 * math.sin(cycle * math.pi))
+        size  = 0.8 + 0.4 * math.sin(seed)
+        draw_vector_heart(surf, hx, hy, size, heart_cols[i], alpha)
+
+
 def draw_menu(screen, dt, selected_idx, completed_games):
     crafted_bg.draw(screen, dt)
+    t = time.time()
 
-    # ── Title banner — clean pill, two lines, like the reference ─────────────
-    t   = time.time()
-    bx  = 14
-    bw  = WIDTH - 28
-    th1 = font_title.get_height()
-    th2 = font_win.get_height()
-    bh  = th1 + th2 + 36          # padding top/between/bottom
-    by  = 14
+    # Full-screen Mother's Day illustration
+    _draw_menu_scene(screen, t)
 
-    # Drop shadow
-    pygame.draw.rect(screen, (0, 0, 0),
-                     (bx + 5, by + 7, bw, bh), border_radius=bh // 2)
-    # Body
-    pygame.draw.rect(screen, COLOR_BLUSH,
-                     (bx, by, bw, bh), border_radius=bh // 2)
-    # Outline
-    pygame.draw.rect(screen, COLOR_OUTLINE,
-                     (bx, by, bw, bh), 4, border_radius=bh // 2)
-    # Shine
-    shine = pygame.Surface((max(1, bw - 32), bh // 3), pygame.SRCALPHA)
-    shine.fill((255, 255, 255, 60))
-    screen.blit(shine, (bx + 16, by + 8))
+    # ── "Happy Mama Day" — large title floating in the sky ────────────────────
+    title_cy = int(HEIGHT * 0.22)
 
-    # "HAPPY MAMA" — top line, full title font
-    cy1 = by + 12 + th1 // 2
-    draw_soft_text(screen, "HAPPY MAMA", font_title, COLOR_CREAM,
-                   (WIDTH // 2, cy1), bw - 24)
+    # Soft white glow plate so text reads on any sky colour
+    glow_w = WIDTH - 16
+    glow_h = font_title.get_height() * 2 + font_win.get_height() + 20
+    glow = pygame.Surface((glow_w, glow_h), pygame.SRCALPHA)
+    pygame.draw.ellipse(glow, (255, 255, 255, 45), glow.get_rect())
+    screen.blit(glow, (8, title_cy - glow_h // 2))
 
-    # "DAY!" — second line, slightly smaller
-    cy2 = cy1 + th1 // 2 + 4 + th2 // 2
-    draw_soft_text(screen, "DAY!", font_win, COLOR_YELLOW,
-                   (WIDTH // 2, cy2), bw - 40)
+    # "Happy Mama" — white with dark outline
+    draw_soft_text(screen, "Happy Mama", font_title, COLOR_CREAM,
+                   (WIDTH // 2, title_cy - font_title.get_height() // 2),
+                   WIDTH - 16)
 
-    # Gold stars at the four corners of the banner
-    _draw_star(screen, bx + 26,      by + 20,      7, COLOR_YELLOW)
-    _draw_star(screen, bx + bw - 26, by + 20,      7, COLOR_YELLOW)
-    _draw_star(screen, bx + 26,      by + bh - 20, 7, COLOR_YELLOW)
-    _draw_star(screen, bx + bw - 26, by + bh - 20, 7, COLOR_YELLOW)
+    # "Day!" — gold, slightly smaller
+    draw_soft_text(screen, "Day!", font_title, COLOR_YELLOW,
+                   (WIDTH // 2, title_cy + font_title.get_height() // 2 + 4),
+                   WIDTH - 16)
 
-    # Floating hearts near banner — bob gently
-    for i, hx in enumerate([bx - 4, bx + bw + 4]):
-        bob = math.sin(t * 2.0 + i * 2.1) * 5
-        draw_vector_heart(screen, hx, by + bh // 2 + int(bob), 1.2,
-                          COLOR_CREAM, 200)
+    # Stars orbiting the title
+    for i, (sx, sy, sr) in enumerate([
+        (WIDTH // 2 - 150, title_cy - 30, 8),
+        (WIDTH // 2 + 150, title_cy - 30, 8),
+        (WIDTH // 2 - 120, title_cy + 44, 6),
+        (WIDTH // 2 + 120, title_cy + 44, 6),
+    ]):
+        pulse = 1.0 + 0.25 * math.sin(t * 3 + i * 1.5)
+        _draw_star(screen, sx, sy, int(sr * pulse), COLOR_YELLOW)
 
-    # ── Buttons ───────────────────────────────────────────────────────────────
+    # ── Buttons pinned to bottom ──────────────────────────────────────────────
     BTN_COLORS = [(100, 196, 248), COLOR_BLUSH, (255, 185, 0)]
-    btn_top = by + bh + 20
+    btn_h   = 66
+    btn_gap = 10
+    btn_top = HEIGHT - 3 * btn_h - 2 * btn_gap - 20
     for i, opt in enumerate(options):
-        rect = pygame.Rect(WIDTH // 2 - 148, btn_top + i * 88, 296, 66)
+        rect = pygame.Rect(WIDTH // 2 - 148, btn_top + i * (btn_h + btn_gap), 296, btn_h)
         col  = COLOR_BLUSH if i == selected_idx else BTN_COLORS[i % 3]
         draw_crafted_button(screen, rect, opt["text"], font_ui, col)
         if i in completed_games:
@@ -1683,12 +1737,9 @@ async def _main():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = pygame.mouse.get_pos()
                 if game_state == GameState.MENU:
-                    _th1 = font_title.get_height() if font_title else 52
-                    _th2 = font_win.get_height()   if font_win   else 40
-                    _bh  = _th1 + _th2 + 36
-                    btn_top = 14 + _bh + 20
+                    btn_top = HEIGHT - 3 * 66 - 2 * 10 - 20
                     for i in range(3):
-                        if pygame.Rect(WIDTH//2 - 148, btn_top + i*88, 296, 66).collidepoint(mx, my):
+                        if pygame.Rect(WIDTH//2 - 148, btn_top + i * 76, 296, 66).collidepoint(mx, my):
                             selected_idx = i
                             if options[selected_idx].get("type") == "trivia":
                                 if pending_trivia_questions:
