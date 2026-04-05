@@ -372,14 +372,14 @@ class CraftedBackground:
                 (WIDTH,HEIGHT),(0,HEIGHT)]
         pygame.draw.polygon(surf, COLOR_GRASS, pts2)
 
-        # Cream ground strip
+        # Cream ground strip — fills all the way to bottom
         gy = int(HEIGHT*0.78)
-        pygame.draw.rect(surf, COLOR_GROUND, (0, gy, WIDTH, HEIGHT-gy))
+        pygame.draw.rect(surf, COLOR_GROUND, (0, gy, WIDTH, HEIGHT))
 
         # Hill layer 3 — front, darkest (sits on cream)
         h3 = int(HEIGHT*0.72)
         pts3 = [(0,h3+14),(WIDTH//4,h3-48),(WIDTH//2,h3+6),
-                (3*WIDTH//4,h3-46),(WIDTH,h3+16),(WIDTH,gy+6),(0,gy+6)]
+                (3*WIDTH//4,h3-46),(WIDTH,h3+16),(WIDTH,HEIGHT),(0,HEIGHT)]
         pygame.draw.polygon(surf, COLOR_GRASS_DARK, pts3)
 
         # Flowers on front hill
@@ -1018,7 +1018,7 @@ def draw_menu(screen, dt, selected_idx, completed_games):
     BTN_COLORS = [(100, 196, 248), COLOR_BLUSH, (255, 185, 0)]
     btn_h   = 66
     btn_gap = 10
-    btn_top = HEIGHT - 3 * btn_h - 2 * btn_gap - 20
+    btn_top = HEIGHT - 3 * btn_h - 2 * btn_gap - 70
     for i, opt in enumerate(options):
         rect = pygame.Rect(WIDTH // 2 - 148, btn_top + i * (btn_h + btn_gap), 296, btn_h)
         col  = COLOR_BLUSH if i == selected_idx else BTN_COLORS[i % 3]
@@ -1737,7 +1737,7 @@ async def _main():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = pygame.mouse.get_pos()
                 if game_state == GameState.MENU:
-                    btn_top = HEIGHT - 3 * 66 - 2 * 10 - 20
+                    btn_top = HEIGHT - 3 * 66 - 2 * 10 - 70
                     for i in range(3):
                         if pygame.Rect(WIDTH//2 - 148, btn_top + i * 76, 296, 66).collidepoint(mx, my):
                             selected_idx = i
