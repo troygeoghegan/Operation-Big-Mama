@@ -30,14 +30,15 @@ except ImportError:
     HAS_JS = False
 
 IS_WEB = HAS_JS
+DEBUG_MODE = os.environ.get("MAMA_DEBUG", "0") == "1"
 
 def trigger_vibration():
     if HAS_VIBRATOR:
         try: vibrator.vibrate(0.4)
-        except: pass
+        except Exception: pass
     if HAS_JS:
         try: js.navigator.vibrate(400)
-        except: pass
+        except Exception: pass
 
 try:
     from google import genai
@@ -70,6 +71,7 @@ class GameState(Enum):
     PDF_VIEWER = auto()
     TRIVIA_CORRECT = auto()
     TRIVIA_FAIL_FADE = auto()
+    SECRET_REWARD = auto()
 
 TRIVIA_QUESTIONS = [
     {
@@ -217,6 +219,8 @@ def draw_vector_heart(surf, x, y, size, color, alpha=255):
     pygame.draw.polygon(temp_surf, rgb_color, points)
     surf.blit(temp_surf, (x - max_r, y - max_r))
 
+_btn_text_cache = {}
+
 def draw_crafted_button(screen, rect, text, font, base_color):
     mx, my = pygame.mouse.get_pos()
     is_hover = rect.collidepoint(mx, my)
@@ -230,49 +234,58 @@ def draw_crafted_button(screen, rect, text, font, base_color):
     pygame.draw.rect(screen, base_color,   btn, border_radius=r)
     # Outline
     pygame.draw.rect(screen, COLOR_OUTLINE, btn, 4, border_radius=r)
-    # Vertical gradient: light top → transparent bottom
-    grad_w = max(1, btn.width - 8)
-    grad_h = max(1, btn.height)
-    grad = pygame.Surface((grad_w, grad_h), pygame.SRCALPHA)
-    for gy in range(grad_h):
-        t_g = gy / grad_h
-        # top half brightens, bottom half darkens
-        if t_g < 0.45:
-            a = int(110 * (1 - t_g / 0.45))
-            grad.fill((255, 255, 255, a), (0, gy, grad_w, 1))
-        else:
-            a = int(60 * ((t_g - 0.45) / 0.55))
-            grad.fill((0, 0, 0, a), (0, gy, grad_w, 1))
-    screen.blit(grad, (btn.x + 4, btn.y))
+    # Soft shine ellipse clipped to top of pill — no rectangle overflow
+    shine_surf = pygame.Surface((btn.width - 8, btn.height), pygame.SRCALPHA)
+    shine_rect = pygame.Rect(btn.width // 6, 3, btn.width // 2, btn.height // 3)
+    pygame.draw.ellipse(shine_surf, (255, 255, 255, 70), shine_rect)
+    screen.blit(shine_surf, (btn.x + 4, btn.y))
 
     lines = wrap_text(text, font, btn.width - 20)
     line_h = font.get_height()
     ty = btn.centery - (line_h * len(lines)) // 2
     for line in lines:
-        o = font.render(line, True, COLOR_OUTLINE)
-        for ddx, ddy in [(-2,0),(2,0),(0,-2),(0,2),(-2,-2),(2,-2),(-2,2),(2,2)]:
-            screen.blit(o, (btn.centerx - o.get_width()//2 + ddx, ty + ddy))
-        ts = font.render(line, True, COLOR_CREAM)
-        screen.blit(ts, (btn.centerx - ts.get_width()//2, ty))
+        cache_key = (line, id(font))
+        cached_line = _btn_text_cache.get(cache_key)
+        if cached_line is None:
+            o = font.render(line, True, COLOR_OUTLINE)
+            ts = font.render(line, True, COLOR_CREAM)
+            tw, th = ts.get_size()
+            ow = 2
+            combined = pygame.Surface((tw + ow*2, th + ow*2), pygame.SRCALPHA)
+            for ddx, ddy in [(-ow,0),(ow,0),(0,-ow),(0,ow),(-ow,-ow),(ow,-ow),(-ow,ow),(ow,ow)]:
+                combined.blit(o, (ow + ddx, ow + ddy))
+            combined.blit(ts, (ow, ow))
+            _btn_text_cache[cache_key] = combined
+            cached_line = combined
+        screen.blit(cached_line, (btn.centerx - cached_line.get_width()//2, ty))
         ty += line_h
 
+_soft_text_cache = {}
+
 def draw_soft_text(screen, text, font, color, center_pos, max_width=None):
-    """Cartoon outlined text: dark navy ring, then colour fill on top."""
-    text_surf = font.render(text, True, color)
-    out_surf  = font.render(text, True, COLOR_OUTLINE)
-    if max_width and text_surf.get_width() > max_width:
-        sc = max_width / text_surf.get_width()
-        nw, nh = max(1, int(text_surf.get_width()*sc)), max(1, int(text_surf.get_height()*sc))
-        text_surf = pygame.transform.smoothscale(text_surf, (nw, nh))
-        out_surf  = pygame.transform.smoothscale(out_surf,  (nw, nh))
+    """Cartoon outlined text: dark navy ring, then colour fill on top. Cached."""
+    key = (text, id(font), color, max_width)
+    cached = _soft_text_cache.get(key)
+    if cached is None:
+        text_surf = font.render(text, True, color)
+        out_surf  = font.render(text, True, COLOR_OUTLINE)
+        if max_width and text_surf.get_width() > max_width:
+            sc = max_width / text_surf.get_width()
+            nw, nh = max(1, int(text_surf.get_width()*sc)), max(1, int(text_surf.get_height()*sc))
+            text_surf = pygame.transform.smoothscale(text_surf, (nw, nh))
+            out_surf  = pygame.transform.smoothscale(out_surf,  (nw, nh))
+        tw, th = text_surf.get_size()
+        ow = 3
+        combined = pygame.Surface((tw + ow*2, th + ow*2), pygame.SRCALPHA)
+        for ddx in (-ow, 0, ow):
+            for ddy in (-ow, 0, ow):
+                if ddx or ddy:
+                    combined.blit(out_surf, (ow + ddx, ow + ddy))
+        combined.blit(text_surf, (ow, ow))
+        _soft_text_cache[key] = combined
+        cached = combined
     cx, cy = center_pos
-    tw, th = text_surf.get_size()
-    ow = 3
-    for ddx in (-ow, 0, ow):
-        for ddy in (-ow, 0, ow):
-            if ddx or ddy:
-                screen.blit(out_surf, (cx - tw//2 + ddx, cy - th//2 + ddy))
-    screen.blit(text_surf, (cx - tw//2, cy - th//2))
+    screen.blit(cached, (cx - cached.get_width()//2, cy - cached.get_height()//2))
 
 def _draw_star(surf, x, y, r, color):
     """Simple 8-point gold star."""
@@ -294,6 +307,12 @@ def _draw_banner(surf, rect, color=None):
     shine = pygame.Surface((max(1, rect.width-24), max(1, rect.height//3)), pygame.SRCALPHA)
     shine.fill((255, 255, 255, 65))
     surf.blit(shine, (rect.x+12, rect.y+8))
+
+def _menu_button_rects():
+    """Shared menu button geometry — used by both draw_menu and click handler."""
+    btn_h, btn_gap = 66, 10
+    btn_top = HEIGHT - 3 * btn_h - 2 * btn_gap - 70
+    return [pygame.Rect(WIDTH // 2 - 148, btn_top + i * (btn_h + btn_gap), 296, btn_h) for i in range(3)]
 
 def get_trivia_layout():
     """Return (q_rect, start_y) based on current font so banner+card+answers all fit."""
@@ -652,13 +671,19 @@ options = [{"text": "Nap Time", "limit": None, "pairs": 6, "type": "trivia"}, {"
 selected_idx = None
 game_state = GameState.ORIENTATION_PROMPT if IS_WEB else GameState.MENU
 completed_games = set()
+secret_button_appear_time = 0
+secret_unlocked_seen = False
 cards, first, second, wait_timer = [], None, None, 0
 start_time, paused_time, modal_image, modal_start_time = 0, 0, None, 0
 win_animation_start_time = 0
 win_particles = []
 current_question_idx = 0
+trivia_question_start = 0
+TRIVIA_TIME_LIMIT = 30
 prev_game_state_before_landscape = None
 _prompt_start = None
+_menu_enter_time = None
+_menu_prev_state = None
 
 font_title = None
 font_win = None
@@ -925,23 +950,126 @@ def draw_landscape_ready(screen, dt, elapsed):
             screen.blit(s, (cx - s.get_width()//2, yo))
 
 
-def _render_scaled_outlined(surf, text, font, scale, color, cx, cy):
-    """Render `text` in `font` scaled to `scale` fraction, with dark outline."""
-    ts = font.render(text, True, color)
-    os_ = font.render(text, True, COLOR_OUTLINE)
-    nw = max(1, int(ts.get_width() * scale))
-    nh = max(1, int(ts.get_height() * scale))
-    ts  = pygame.transform.smoothscale(ts,  (nw, nh))
-    os_ = pygame.transform.smoothscale(os_, (nw, nh))
-    ow = 3
-    for ddx in (-ow, 0, ow):
-        for ddy in (-ow, 0, ow):
-            if ddx or ddy:
-                surf.blit(os_, (cx - nw//2 + ddx, cy - nh//2 + ddy))
-    surf.blit(ts, (cx - nw//2, cy - nh//2))
+def _draw_unicorn(surf, anim_t):
+    """16-bit style unicorn: enters left, pauses, winks, exits right. Loops ~9 s."""
+    CYCLE  = 9.0
+    t      = anim_t % CYCLE
+
+    GY     = int(HEIGHT * 0.78)   # feet level
+    STOP_X = int(WIDTH  * 0.28)   # body-center x where it pauses
+
+    if t < 2.8:
+        cx_body = int(-80 + (STOP_X + 80) * (t / 2.8))
+        walking, wink = True, False
+    elif t < 4.5:
+        cx_body = STOP_X
+        walking, wink = False, False
+    elif t < 5.2:
+        cx_body = STOP_X
+        walking, wink = False, True
+    else:
+        cx_body = int(STOP_X + (WIDTH + 120 - STOP_X) * ((t - 5.2) / (CYCLE - 5.2)))
+        walking, wink = True, False
+
+    # palette
+    WHITE   = (252, 252, 252)
+    OUTLINE = (22,  10,  52)
+    PINK    = (255, 80,  180)
+    PURPLE  = (190, 70,  255)
+    GOLD    = (255, 215, 0)
+    HOOF    = (195, 155, 215)
+    NOSE    = (255, 175, 195)
+    MANE_COLS = [PINK, PURPLE, GOLD]
+
+    BW, BH = 60, 32
+    LH, LW = 16, 7
+    HR     = 16
+
+    bx = cx_body - BW // 2
+    by = GY - LH - BH
+
+    # tail (behind body)
+    for ti, tc in enumerate(MANE_COLS):
+        tpx = bx - 4 - ti * 4
+        tpy = by + BH // 2 + ti * 8
+        pygame.draw.circle(surf, OUTLINE, (tpx, tpy), 7)
+        pygame.draw.circle(surf, tc,      (tpx, tpy), 6)
+
+    # legs — trapezoid per leg so they swing at the foot
+    hip_xs = [bx + 8, bx + 16, bx + 40, bx + 48]
+    for i, hx in enumerate(hip_xs):
+        swing = int(math.sin(anim_t * 10 + i * math.pi / 2) * 7) if walking else 0
+        fx = hx + swing
+        hy = by + BH
+        pts  = [(hx - LW//2,     hy), (hx + LW//2 + 1, hy),
+                (fx + LW//2 + 1, GY), (fx - LW//2,     GY)]
+        inner= [(hx - LW//2 + 1, hy + 1), (hx + LW//2,     hy + 1),
+                (fx + LW//2,     GY - 1), (fx - LW//2 + 1, GY - 1)]
+        pygame.draw.polygon(surf, OUTLINE, pts)
+        pygame.draw.polygon(surf, WHITE,   inner)
+        pygame.draw.rect(surf, OUTLINE, (fx - LW//2 - 1, GY - 5, LW + 2, 6), border_radius=2)
+        pygame.draw.rect(surf, HOOF,    (fx - LW//2,     GY - 4, LW,     4), border_radius=2)
+
+    # body
+    pygame.draw.rect(surf, OUTLINE, (bx - 2, by - 2, BW + 4, BH + 4), border_radius=12)
+    pygame.draw.rect(surf, WHITE,   (bx,     by,     BW,     BH),     border_radius=10)
+
+    # neck (circle chain)
+    ncx, ncy = bx + BW + 6, by + 8
+    for ns in range(5):
+        f   = ns / 4
+        nx_ = int(ncx + f * 12)
+        ny_ = int(ncy - f * 14)
+        nr  = int(12 - f * 3)
+        pygame.draw.circle(surf, OUTLINE, (nx_, ny_), nr + 2)
+        pygame.draw.circle(surf, WHITE,   (nx_, ny_), nr)
+
+    # head
+    hcx = ncx + 22
+    hcy = ncy - 20
+    pygame.draw.circle(surf, OUTLINE, (hcx, hcy), HR + 2)
+    pygame.draw.circle(surf, WHITE,   (hcx, hcy), HR)
+
+    # snout
+    pygame.draw.ellipse(surf, OUTLINE, (hcx + 5,  hcy + 2, 16, 12))
+    pygame.draw.ellipse(surf, WHITE,   (hcx + 6,  hcy + 3, 14, 10))
+    pygame.draw.circle(surf,  NOSE,    (hcx + 15, hcy + 7),  2)
+
+    # eye
+    ex, ey = hcx + 4, hcy - 3
+    if wink:
+        pygame.draw.arc(surf, OUTLINE, (ex - 5, ey - 1, 11, 9), 0, math.pi, 3)
+        for la in (-2, 0, 2):
+            pygame.draw.line(surf, OUTLINE, (ex + la, ey - 1), (ex + la, ey - 5), 1)
+    else:
+        pygame.draw.circle(surf, OUTLINE,         (ex, ey), 5)
+        pygame.draw.circle(surf, (255, 255, 255), (ex, ey), 4)
+        pygame.draw.circle(surf, OUTLINE,         (ex + 1, ey), 2)
+        pygame.draw.circle(surf, (255, 255, 255), (ex + 2, ey - 1), 1)
+
+    # horn
+    tip = (hcx,     hcy - HR - 18)
+    bl  = (hcx - 5, hcy - HR + 2)
+    br  = (hcx + 8, hcy - HR + 2)
+    pygame.draw.polygon(surf, OUTLINE, [tip, bl, br])
+    pygame.draw.polygon(surf, GOLD,    [(tip[0], tip[1] + 2), (bl[0] + 1, bl[1]), (br[0] - 1, br[1])])
+    for si in range(4):
+        f   = (si + 1) / 5
+        sx  = int(bl[0] + (tip[0] - bl[0]) * f) + 1
+        srx = int(br[0] + (tip[0] - br[0]) * f) - 1
+        sy  = int(bl[1] + (tip[1] - bl[1]) * f)
+        pygame.draw.line(surf, MANE_COLS[si % 3], (sx, sy), (srx, sy), 1)
+
+    # mane blobs
+    for mi, mc in enumerate(MANE_COLS):
+        mx_ = hcx - 8 + mi * 5
+        my_ = hcy - HR + 6 + mi * 6
+        pygame.draw.circle(surf, OUTLINE, (mx_, my_), 8)
+        pygame.draw.circle(surf, mc,      (mx_, my_), 7)
+
 
 def _draw_menu_scene(surf, t):
-    """Mother's Day illustration: sun, rainbow, big flowers, floating hearts."""
+    """Mother's Day illustration: sun, unicorn, big flowers, floating hearts."""
     # ── Sun top-right ────────────────────────────────────────────────────────
     sun_x, sun_y, sun_r = int(WIDTH * 0.82), 72, 36
     for ang in range(0, 360, 30):
@@ -957,30 +1085,8 @@ def _draw_menu_scene(surf, t):
     pygame.draw.circle(surf, COLOR_YELLOW,  (sun_x, sun_y), sun_r)
     pygame.draw.circle(surf, (255, 245, 150), (sun_x - 10, sun_y - 10), sun_r // 3)
 
-    # ── Rainbow — thick bubbly bands drawn as circle chains ─────────────────
-    r_cols  = [(255,80,80),(255,160,0),(255,230,0),(80,200,80),(80,140,255),(180,80,255)]
-    arc_cx  = int(WIDTH * 0.38)
-    arc_cy  = int(HEIGHT * 0.60)
-    band_r  = 10          # radius of each circle in the chain
-    spacing = 7           # degrees between circles
-    for ri, rc in enumerate(r_cols):
-        rr = 82 + ri * (band_r * 2 + 3)
-        # dark outline ring first
-        for ang in range(10, 171, spacing):
-            rad = math.radians(ang)
-            cx2 = int(arc_cx + math.cos(rad) * rr)
-            cy2 = int(arc_cy - math.sin(rad) * rr)
-            pygame.draw.circle(surf, COLOR_OUTLINE, (cx2, cy2), band_r + 2)
-        # colour fill on top
-        for ang in range(10, 171, spacing):
-            rad = math.radians(ang)
-            cx2 = int(arc_cx + math.cos(rad) * rr)
-            cy2 = int(arc_cy - math.sin(rad) * rr)
-            pygame.draw.circle(surf, rc, (cx2, cy2), band_r)
-            # shine dot top-left
-            pygame.draw.circle(surf, (255,255,255),
-                               (cx2 - band_r//3, cy2 - band_r//3),
-                               max(1, band_r // 3))
+    # ── Unicorn ───────────────────────────────────────────────────────────────
+    _draw_unicorn(surf, t)
 
     # ── Big foreground flowers ────────────────────────────────────────────────
     h3y = int(HEIGHT * 0.72)
@@ -1017,84 +1123,139 @@ def _draw_menu_scene(surf, t):
         draw_vector_heart(surf, hx, hy, size, heart_cols[i], alpha)
 
 
+def _ease_out_back(t):
+    """Overshoot ease-out for bouncy pop-in."""
+    c1 = 1.70158
+    c3 = c1 + 1
+    return 1 + c3 * pow(t - 1, 3) + c1 * pow(t - 1, 2)
+
+def _ease_out_cubic(t):
+    return 1 - pow(1 - t, 3)
+
 def draw_menu(screen, dt, selected_idx, completed_games):
+    global _menu_enter_time, _menu_prev_state
     crafted_bg.draw(screen, dt)
     t = time.time()
+
+    # Track menu entry for animation
+    if _menu_enter_time is None or _menu_prev_state != GameState.MENU:
+        _menu_enter_time = t
+    _menu_prev_state = GameState.MENU
+    menu_elapsed = t - _menu_enter_time
 
     # Full-screen Mother's Day illustration
     _draw_menu_scene(screen, t)
 
-    # ── Title lockup: "Happy" / "MAMA" / "Day ♥" ─────────────────────────────
-    #   Small word → HUGE hero word → small word  (like the reference)
+    # ── Title lockup: "HAPPY MAMA DAY" ──────────────────────────────────────
+    #   Single centered unit that animates in together, then holds
     _fhuge    = font_huge if font_huge else font_title
     lockup_cy = int(HEIGHT * 0.26)
     cx        = WIDTH // 2
 
-    # Row heights — happy/day are _fhuge scaled down
+    # Row heights — Happy/Day are scaled down from the hero font
     r_mama  = _fhuge.get_height()
-    r_happy = int(r_mama * 0.40)
-    r_day   = int(r_mama * 0.38)
-    gap     = 4
+    r_happy = int(r_mama * 0.36)
+    r_day   = int(r_mama * 0.34)
+    gap     = -2
     total_h = r_happy + gap + r_mama + gap + r_day
 
-    y_happy = lockup_cy - total_h // 2
-    y_mama  = y_happy + r_happy + gap
-    y_day   = y_mama  + r_mama  + gap
+    # ── Animation: lockup scales up 0→1 with bounce over 0.6s ────────────────
+    LOCKUP_DUR = 0.6
+    lockup_p = min(1.0, menu_elapsed / LOCKUP_DUR)
+    lockup_scale = _ease_out_back(lockup_p)
+    lockup_alpha = min(255, int(lockup_p * 2.5 * 255))  # fade in faster than scale
 
-    # ── "Happy" — same font as MAMA but scaled down to ~40% ─────────────────
-    _render_scaled_outlined(screen, "Happy", _fhuge, 0.40, COLOR_CREAM,
-                            cx, y_happy + r_happy // 2)
+    # Build the entire lockup onto one surface, then scale + blit it
+    lockup_w = WIDTH
+    lockup_h = total_h + 30  # padding for outlines and bob
+    lockup_surf = pygame.Surface((lockup_w, lockup_h), pygame.SRCALPHA)
+    lcx = lockup_w // 2
+    # Vertical offsets within the lockup surface
+    ly_happy = 10
+    ly_mama  = ly_happy + r_happy + gap
+    ly_day   = ly_mama  + r_mama  + gap
 
-    # ── "MAMA" — each letter individually, bouncing + alternating pink/gold ──
+    # "Happy" — centered, scaled to 40%
+    happy_fs = _fhuge.render("Happy", True, COLOR_CREAM)
+    happy_os = _fhuge.render("Happy", True, COLOR_OUTLINE)
+    hsw = max(1, int(happy_fs.get_width() * 0.40))
+    hsh = max(1, int(happy_fs.get_height() * 0.40))
+    happy_fs = pygame.transform.smoothscale(happy_fs, (hsw, hsh))
+    happy_os = pygame.transform.smoothscale(happy_os, (hsw, hsh))
+    ow = 3
+    for ddx in (-ow, 0, ow):
+        for ddy in (-ow, 0, ow):
+            if ddx or ddy:
+                lockup_surf.blit(happy_os, (lcx - hsw//2 + ddx, ly_happy + r_happy//2 - hsh//2 + ddy))
+    lockup_surf.blit(happy_fs, (lcx - hsw//2, ly_happy + r_happy//2 - hsh//2))
+
+    # "MAMA" — individual letters, alternating pink/gold, gentle bob once settled
     letters      = "MAMA"
     alt_cols     = [COLOR_BLUSH, COLOR_YELLOW, COLOR_BLUSH, COLOR_YELLOW]
     letter_surfs = [_fhuge.render(l, True, c) for l, c in zip(letters, alt_cols)]
     out_surfs    = [_fhuge.render(l, True, COLOR_OUTLINE) for l in letters]
     total_lw     = sum(s.get_width() for s in letter_surfs) + 2 * (len(letters) - 1)
-    lx           = cx - total_lw // 2
-    ow            = 4   # outline width
+    lx           = lcx - total_lw // 2
+    mow          = 4
     for idx, (ls, os_) in enumerate(zip(letter_surfs, out_surfs)):
-        bob  = int(math.sin(t * 2.8 + idx * 1.1) * 7)
-        ly   = y_mama + bob
-        lw   = ls.get_width()
-        lh   = ls.get_height()
-        # Dark outline — 8 directions
-        for ddx in (-ow, 0, ow):
-            for ddy in (-ow, 0, ow):
+        bob = int(math.sin(t * 2.8 + idx * 1.1) * 7) if lockup_p >= 1.0 else 0
+        ly  = ly_mama + bob
+        for ddx in (-mow, 0, mow):
+            for ddy in (-mow, 0, mow):
                 if ddx or ddy:
-                    screen.blit(os_, (lx + ddx, ly + ddy))
-        screen.blit(ls, (lx, ly))
-        # Shine spot top-left of each letter
-        shine_s = pygame.Surface((max(1, lw // 3), max(1, lh // 5)), pygame.SRCALPHA)
-        shine_s.fill((255, 255, 255, 80))
-        screen.blit(shine_s, (lx + lw // 6, ly + lh // 8))
-        lx += lw + 2
+                    lockup_surf.blit(os_, (lx + ddx, ly + ddy))
+        lockup_surf.blit(ls, (lx, ly))
+        lx += ls.get_width() + 2
 
-    # ── "Day ♥" — same font as MAMA scaled to ~38%, gold ────────────────────
-    _render_scaled_outlined(screen, "Day  \u2665", _fhuge, 0.38, COLOR_YELLOW,
-                            cx, y_day + r_day // 2)
+    # "Day ♥" — centered, scaled to 38%
+    day_fs = _fhuge.render("Day  \u2665", True, COLOR_YELLOW)
+    day_os = _fhuge.render("Day  \u2665", True, COLOR_OUTLINE)
+    dsw = max(1, int(day_fs.get_width() * 0.38))
+    dsh = max(1, int(day_fs.get_height() * 0.38))
+    day_fs = pygame.transform.smoothscale(day_fs, (dsw, dsh))
+    day_os = pygame.transform.smoothscale(day_os, (dsw, dsh))
+    for ddx in (-ow, 0, ow):
+        for ddy in (-ow, 0, ow):
+            if ddx or ddy:
+                lockup_surf.blit(day_os, (lcx - dsw//2 + ddx, ly_day + r_day//2 - dsh//2 + ddy))
+    lockup_surf.blit(day_fs, (lcx - dsw//2, ly_day + r_day//2 - dsh//2))
 
-    # Pulsing stars beside the lockup
+    # Stars flanking the lockup
+    mama_half_w = total_lw // 2 + 20
     for i, (sx, sy, sr) in enumerate([
-        (cx - 162, y_happy + r_happy // 2, 7),
-        (cx + 162, y_happy + r_happy // 2, 7),
-        (cx - 148, y_day   + r_day   // 2, 5),
-        (cx + 148, y_day   + r_day   // 2, 5),
+        (lcx - mama_half_w, ly_happy + r_happy // 2, 7),
+        (lcx + mama_half_w, ly_happy + r_happy // 2, 7),
+        (lcx - mama_half_w + 14, ly_day + r_day // 2, 5),
+        (lcx + mama_half_w - 14, ly_day + r_day // 2, 5),
     ]):
         pulse = 1.0 + 0.3 * math.sin(t * 2.5 + i * 1.4)
-        _draw_star(screen, sx, sy, int(sr * pulse), COLOR_YELLOW)
+        _draw_star(lockup_surf, sx, sy, int(sr * pulse), COLOR_YELLOW)
 
-    # ── Buttons pinned to bottom ──────────────────────────────────────────────
+    # Scale and blit the lockup as one unit
+    if lockup_scale > 0.01:
+        sw = max(1, int(lockup_w * lockup_scale))
+        sh = max(1, int(lockup_h * lockup_scale))
+        scaled = pygame.transform.smoothscale(lockup_surf, (sw, sh))
+        scaled.set_alpha(lockup_alpha)
+        dest_y = lockup_cy - total_h // 2 - 10  # align with original y_happy
+        screen.blit(scaled, (cx - sw // 2, dest_y + lockup_h // 2 - sh // 2))
+
+    # ── Buttons — bubble up after lockup resolves ─────────────────────────────
+    BTN_DELAY  = LOCKUP_DUR + 0.1   # buttons start after lockup finishes
+    BTN_DUR    = 0.35
+    BTN_STAGGER = 0.08
     BTN_COLORS = [(100, 196, 248), COLOR_BLUSH, (255, 185, 0)]
-    btn_h   = 66
-    btn_gap = 10
-    btn_top = HEIGHT - 3 * btn_h - 2 * btn_gap - 70
-    for i, opt in enumerate(options):
-        rect = pygame.Rect(WIDTH // 2 - 148, btn_top + i * (btn_h + btn_gap), 296, btn_h)
+    for i, (opt, rect) in enumerate(zip(options, _menu_button_rects())):
+        btn_elapsed = menu_elapsed - BTN_DELAY - i * BTN_STAGGER
+        btn_p = max(0.0, min(1.0, btn_elapsed / BTN_DUR))
+        if btn_p <= 0:
+            continue
+        slide_offset = int((1 - _ease_out_cubic(btn_p)) * 60)
+        anim_rect = pygame.Rect(rect.x, rect.y + slide_offset, rect.width, rect.height)
         col  = COLOR_BLUSH if i == selected_idx else BTN_COLORS[i % 3]
-        draw_crafted_button(screen, rect, opt["text"], font_ui, col)
+        draw_crafted_button(screen, anim_rect, opt["text"], font_ui, col)
         if i in completed_games:
-            draw_vector_heart(screen, rect.right - 28, rect.centery, 1.0, COLOR_YELLOW)
+            draw_vector_heart(screen, anim_rect.right - 28, anim_rect.centery, 1.0, COLOR_YELLOW)
 
 def draw_playing(screen, dt, limit, elapsed_time, cards):
     crafted_bg.draw(screen, dt)
@@ -1106,7 +1267,14 @@ def draw_playing(screen, dt, limit, elapsed_time, cards):
         pygame.draw.rect(screen, (200, 220, 255), (22, 20, WIDTH-44, 12), border_radius=6)
         pygame.draw.rect(screen, COLOR_OUTLINE, (20, 18, WIDTH-40, 16), 3, border_radius=8)
         if bar_w > 0:
-            pygame.draw.rect(screen, COLOR_YELLOW, (22, 20, max(0,bar_w-4), 12), border_radius=6)
+            if remaining < 10:
+                pulse = abs(math.sin(time.time() * 4)) * 0.3
+                bar_color = (255, int(80 + pulse * 100), 60)
+            elif remaining < 30:
+                bar_color = (255, 200, 0)
+            else:
+                bar_color = COLOR_YELLOW
+            pygame.draw.rect(screen, bar_color, (22, 20, max(0,bar_w-4), 12), border_radius=6)
 
     for card in cards:
         if card["matched"]: continue
@@ -1139,7 +1307,7 @@ def draw_playing(screen, dt, limit, elapsed_time, cards):
     auto_rect = pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38)
     draw_crafted_button(screen, auto_rect, "Auto Win", font_ui, COLOR_BLUSH)
 
-def draw_trivia(screen, dt, question_idx):
+def draw_trivia(screen, dt, question_idx, trivia_remaining):
     crafted_bg.draw(screen, dt)
 
     q_rect, start_y = get_trivia_layout()
@@ -1155,6 +1323,22 @@ def draw_trivia(screen, dt, question_idx):
     for line in title_lines:
         draw_soft_text(screen, line, font_win, COLOR_CREAM, (WIDTH//2, ty + th//2))
         ty += th
+
+    # ── Per-question timer bar ────────────────────────────────────────────────
+    bar_y = banner_h + 14
+    bar_w = int((max(0, trivia_remaining) / TRIVIA_TIME_LIMIT) * (WIDTH - 40))
+    pygame.draw.rect(screen, COLOR_OUTLINE, (20, bar_y, WIDTH-40, 16), border_radius=8)
+    pygame.draw.rect(screen, (200, 220, 255), (22, bar_y+2, WIDTH-44, 12), border_radius=6)
+    pygame.draw.rect(screen, COLOR_OUTLINE, (20, bar_y, WIDTH-40, 16), 3, border_radius=8)
+    if bar_w > 0:
+        if trivia_remaining < 10:
+            pulse = abs(math.sin(time.time() * 4)) * 0.3
+            bar_color = (255, int(80 + pulse * 100), 60)
+        elif trivia_remaining < 15:
+            bar_color = (255, 200, 0)
+        else:
+            bar_color = COLOR_YELLOW
+        pygame.draw.rect(screen, bar_color, (22, bar_y+2, max(0, bar_w-4), 12), border_radius=6)
 
     if question_idx >= len(TRIVIA_QUESTIONS):
         return
@@ -1181,6 +1365,10 @@ def draw_trivia(screen, dt, question_idx):
         opt_rect = pygame.Rect(WIDTH//2 - 185, start_y + i*82, 370, 66)
         col = COLOR_BLUSH if opt_rect.collidepoint(mx, my) else OPT_COLORS[i]
         draw_crafted_button(screen, opt_rect, opt, font_ui, col)
+
+    # ── Auto Win button ──────────────────────────────────────────────────────
+    auto_rect = pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38)
+    draw_crafted_button(screen, auto_rect, "Auto Win", font_ui, COLOR_BLUSH)
 
 def draw_modal(screen, modal_image, modal_start_time):
     m_elapsed = time.time() - modal_start_time
@@ -1329,20 +1517,90 @@ def draw_final_message(screen, dt, transition_particles):
     for p in transition_particles:
         if p["size"] < p["target_size"]: p["size"] += p["growth"] * dt
         draw_vector_heart(screen, p["x"], p["y"], p["size"], p["color"], 180)
-    
+
     draw_soft_text(screen, "Happy Mother's Day!", font_title, COLOR_CREAM,
-                   (WIDTH//2, HEIGHT//2 - 40), WIDTH - 30)
+                   (WIDTH//2, HEIGHT//2 - 60), WIDTH - 30)
+
+    # Secret Gift button — glowing gold, centered
+    glow = 0.5 + 0.5 * math.sin(time.time() * 3)
+    glow_color = (255, int(200 + 55 * glow), 0)
+    secret_gift_rect = pygame.Rect(WIDTH//2 - 100, HEIGHT//2 - 5, 200, 62)
+    draw_crafted_button(screen, secret_gift_rect, "Secret Gift", font_ui, glow_color)
+    # Sparkle stars flanking the button
+    for s in range(4):
+        angle = time.time() * 2.5 + s * (math.pi * 2 / 4)
+        sx = secret_gift_rect.centerx + int(math.cos(angle) * (secret_gift_rect.width // 2 + 18))
+        sy = secret_gift_rect.centery + int(math.sin(angle) * (secret_gift_rect.height // 2 + 12))
+        star_s = max(2, int(4 + 3 * math.sin(time.time() * 5 + s)))
+        _draw_star(screen, sx, sy, star_s, COLOR_YELLOW)
 
     menu_button_rect = pygame.Rect(WIDTH//2 - 168, HEIGHT - 105, 150, 62)
     draw_crafted_button(screen, menu_button_rect, "MENU", font_ui, (100, 196, 248))
 
     exit_button_rect = pygame.Rect(WIDTH//2 + 18, HEIGHT - 105, 150, 62)
     draw_crafted_button(screen, exit_button_rect, "EXIT", font_ui, COLOR_BLUSH)
-    
-    return menu_button_rect, exit_button_rect
+
+    return menu_button_rect, exit_button_rect, secret_gift_rect
+
+def draw_secret_reward(screen, dt, win_animation_start_time, win_particles):
+    crafted_bg.draw(screen, dt)
+
+    # Celebratory gold particles
+    for p in win_particles:
+        p["y"] -= p["speed"] * dt
+        if p["y"] < -50: p["y"] = HEIGHT + 50
+        sway = math.sin(time.time() * 2 + p["seed"]) * 30
+        _draw_star(screen, int(p["x"] + sway), int(p["y"]),
+                   int(p["size"] * 4), p["color"])
+
+    elapsed = time.time() - win_animation_start_time
+    progress = min(1.0, elapsed / 1.2)
+    eased = 1 - (1 - progress) ** 3
+
+    # Large heart at the top
+    hx, hy = WIDTH // 2, int(50 + 15 * (1 - eased))
+    hs = eased * 2.5
+    if hs > 0.1:
+        draw_vector_heart(screen, hx, hy, hs, COLOR_BLUSH)
+
+    # "SECRET REWARD UNLOCKED!"
+    if progress > 0.2:
+        a = min(255, int((progress - 0.2) / 0.25 * 255))
+        txt = font_win.render("SECRET REWARD UNLOCKED!", True, COLOR_YELLOW)
+        txt.set_alpha(a)
+        screen.blit(txt, (WIDTH // 2 - txt.get_width() // 2, 95))
+
+    # "PHOTOSHOOT" big title
+    if progress > 0.45:
+        a = min(255, int((progress - 0.45) / 0.25 * 255))
+        title = font_title.render("PHOTOSHOOT", True, COLOR_BLUSH)
+        title.set_alpha(a)
+        screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 135))
+
+    # "with ANNIE" and description
+    if progress > 0.65:
+        a = min(255, int((progress - 0.65) / 0.25 * 255))
+        sub = font_win.render("with ANNIE", True, COLOR_OUTLINE)
+        sub.set_alpha(a)
+        screen.blit(sub, (WIDTH // 2 - sub.get_width() // 2, 240))
+
+        desc1 = font_ui.render("A prepaid photoshoot with your", True, COLOR_OUTLINE)
+        desc1.set_alpha(a)
+        screen.blit(desc1, (WIDTH // 2 - desc1.get_width() // 2, 290))
+
+        desc2 = font_ui.render("favourite photographer!", True, COLOR_OUTLINE)
+        desc2.set_alpha(a)
+        screen.blit(desc2, (WIDTH // 2 - desc2.get_width() // 2, 318))
+
+    menu_button_rect = None
+    if progress >= 1.0:
+        menu_button_rect = pygame.Rect(WIDTH // 2 - 75, HEIGHT - 80, 150, 55)
+        draw_crafted_button(screen, menu_button_rect, "MENU", font_ui, (100, 196, 248))
+
+    return menu_button_rect
 
 def draw_trivia_correct(screen, dt, start_time, question_idx, heart_pos):
-    draw_trivia(screen, dt, question_idx)
+    draw_trivia(screen, dt, question_idx, TRIVIA_TIME_LIMIT)
     elapsed = time.time() - start_time
 
     for i in range(3):
@@ -1362,7 +1620,7 @@ def draw_trivia_fail_fade(screen, dt, start_time, question_idx):
     elapsed = time.time() - start_time
     
     temp_surf = pygame.Surface((WIDTH, HEIGHT))
-    draw_trivia(temp_surf, dt, question_idx)
+    draw_trivia(temp_surf, dt, question_idx, TRIVIA_TIME_LIMIT)
     
     shake_x, shake_y = 0, 0
     if elapsed < 0.4:
@@ -1463,15 +1721,21 @@ def draw_won_gameover(screen, dt, game_state_val, selected_idx, win_animation_st
                 btn_label = "Booked for 2pm" if selected_idx == 1 else "Momma's Menu"
                 draw_crafted_button(screen, menu_button_rect, btn_label, font_ui, COLOR_BLUSH)
     else:
-        txt = font_win.render(msg, True, COLOR_TEXT)
-        screen.blit(txt, (WIDTH//2 - txt.get_width()//2, HEIGHT//2 - 40))
-        menu_button_rect = pygame.Rect(WIDTH//2 - 80, HEIGHT//2 + 60, 160, 50)
+        crafted_bg.draw(screen, dt)
+        for p in win_particles:
+            p["y"] -= p["speed"] * dt
+            if p["y"] < -50: p["y"] = HEIGHT + 50
+            sway = math.sin(time.time()*2 + p["seed"]) * 30
+            draw_vector_heart(screen, p["x"] + sway, p["y"], p["size"], p["color"], 150)
+        draw_vector_heart(screen, WIDTH//2, HEIGHT//2 - 60, 6.0, COLOR_BLUSH)
+        draw_soft_text(screen, msg, font_win, COLOR_CREAM, (WIDTH//2, HEIGHT//2 + 40), max_width=WIDTH - 40)
+        menu_button_rect = pygame.Rect(WIDTH//2 - 80, HEIGHT//2 + 100, 160, 50)
         draw_crafted_button(screen, menu_button_rect, "MENU", font_ui, COLOR_BLUSH)
 
     return menu_button_rect, save_button_rect
 
 async def main():
-    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx
+    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, trivia_question_start
     try:
         await _main()
     except Exception:
@@ -1488,13 +1752,13 @@ async def main():
                 surf = f.render(line[:90], True, (255, 80, 80))
                 s.blit(surf, (10, 10 + i * 24))
             pygame.display.flip()
-        except:
+        except Exception:
             pass
         while True:
             await asyncio.sleep(1)
 
 async def _main():
-    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape
+    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape, trivia_question_start, secret_button_appear_time, secret_unlocked_seen
     global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui, font_huge
 
     pygame.display.init()
@@ -1559,7 +1823,7 @@ async def _main():
             path = os.path.join(root_path, fname)
             if os.path.exists(path):
                 reward_images[idx] = pygame.image.load(path).convert_alpha()
-    except: pass
+    except Exception: pass
 
     menu_images = []
     try:
@@ -1573,7 +1837,7 @@ async def _main():
                         scale = (WIDTH - 100) / img.get_width()
                         menu_images.append(pygame.transform.smoothscale(img, (int(WIDTH - 100), int(img.get_height() * scale))))
                         break
-    except: pass
+    except Exception: pass
 
     nodo_image = None
     try:
@@ -1586,7 +1850,7 @@ async def _main():
                 if scale < 1:
                     nodo_image = pygame.transform.smoothscale(nodo_image, (int(nodo_image.get_width() * scale), int(nodo_image.get_height() * scale)))
                 break
-    except: pass
+    except Exception: pass
 
     nodo_video_path = None
     try:
@@ -1600,27 +1864,33 @@ async def _main():
                 if os.path.exists(fpath):
                     nodo_video_path = fpath
                     break
-    except: pass
+    except Exception: pass
 
     massage_video_path = None
     try:
-        if os.path.exists(video_dir):
+        if nodo_video_path and os.path.exists(os.path.dirname(nodo_video_path)):
+            _vdir = os.path.dirname(nodo_video_path)
+        elif 'video_dir' in dir() and os.path.exists(video_dir):
+            _vdir = video_dir
+        else:
+            _vdir = None
+        if _vdir:
             for fname in ["MASSAGE.mp4", "massage.mp4", "Massage.mp4", "MASSAGE.mov"]:
-                if os.path.exists(os.path.join(video_dir, fname)):
-                    massage_video_path = os.path.join(video_dir, fname)
+                if os.path.exists(os.path.join(_vdir, fname)):
+                    massage_video_path = os.path.join(_vdir, fname)
                     break
-    except: pass
+    except Exception: pass
 
     _curr_dir  = os.path.dirname(os.path.abspath(__file__))
     _parent_dir = os.path.dirname(_curr_dir)
 
     # Fredoka One → titles and win-screen text (bubbly, rounded)
     fredoka = None
-    for fname in ["FredokaOne-Regular.ttf", "Fredoka_One.ttf", "fredoka_one.ttf"]:
+    for fname in ["FredokaOne-Regular.ttf", "Fredoka-Bold.ttf", "Fredoka-SemiBold.ttf", "Fredoka_One.ttf", "fredoka_one.ttf"]:
         p = os.path.join(_curr_dir, fname)
         if os.path.exists(p):
             try: fredoka = p; break
-            except: pass
+            except Exception: pass
 
     # Titan One → buttons and UI text (chunky, bold)
     titan = None
@@ -1628,20 +1898,20 @@ async def _main():
         p = os.path.join(_curr_dir, fname)
         if os.path.exists(p):
             try: titan = p; break
-            except: pass
+            except Exception: pass
 
     try:
         font_title = pygame.font.Font(fredoka, 54) if fredoka else pygame.font.SysFont(None, 52)
         font_win   = pygame.font.Font(fredoka, 40) if fredoka else pygame.font.SysFont(None, 40)
         font_huge  = pygame.font.Font(titan,   92) if titan   else pygame.font.SysFont(None, 88)
-    except:
+    except Exception:
         font_title = pygame.font.SysFont(None, 52)
         font_win   = pygame.font.SysFont(None, 40)
         font_huge  = pygame.font.SysFont(None, 88)
 
     try:
         font_ui = pygame.font.Font(titan, 22) if titan else pygame.font.SysFont(None, 24)
-    except:
+    except Exception:
         font_ui = pygame.font.SysFont(None, 24)
 
     scroll_y = 0
@@ -1652,6 +1922,7 @@ async def _main():
     menu_button_rect = None
     save_button_rect = None
     exit_button_rect = None
+    secret_gift_rect = None
     pdf_scroll_y = 0
     pdf_close_rect = None
     correct_anim_start = 0
@@ -1684,7 +1955,12 @@ async def _main():
             draw_menu(screen, dt, selected_idx, completed_games)
             
         elif game_state == GameState.PLAYING_TRIVIA:
-            draw_trivia(screen, dt, current_question_idx)
+            trivia_remaining = TRIVIA_TIME_LIMIT - (time.time() - trivia_question_start)
+            draw_trivia(screen, dt, current_question_idx, trivia_remaining)
+            if trivia_remaining <= 0:
+                game_state = GameState.TRIVIA_FAIL_FADE
+                transition_start_time = time.time()
+                trigger_vibration()
 
         elif game_state in [GameState.PLAYING, GameState.MODAL]:
             limit = options[selected_idx]["limit"]
@@ -1778,8 +2054,11 @@ async def _main():
             pdf_close_rect = draw_pdf_viewer(screen, pdf_surface, pdf_surface_height, pdf_scroll_y)
 
         elif game_state == GameState.FINAL_MESSAGE:
-            menu_button_rect, exit_button_rect = draw_final_message(screen, dt, transition_particles)
-            
+            menu_button_rect, exit_button_rect, secret_gift_rect = draw_final_message(screen, dt, transition_particles)
+
+        elif game_state == GameState.SECRET_REWARD:
+            menu_button_rect = draw_secret_reward(screen, dt, win_animation_start_time, win_particles)
+
         elif game_state == GameState.TRIVIA_CORRECT:
             if draw_trivia_correct(screen, dt, correct_anim_start, current_question_idx, correct_anim_pos):
                 current_question_idx += 1
@@ -1790,6 +2069,7 @@ async def _main():
                     transition_particles = []
                 else:
                     game_state = GameState.PLAYING_TRIVIA
+                    trivia_question_start = time.time()
 
         elif game_state == GameState.TRIVIA_FAIL_FADE:
             if draw_trivia_fail_fade(screen, dt, transition_start_time, current_question_idx):
@@ -1809,31 +2089,38 @@ async def _main():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = pygame.mouse.get_pos()
                 if game_state == GameState.MENU:
-                    btn_top = HEIGHT - 3 * 66 - 2 * 10 - 70
-                    for i in range(3):
-                        if pygame.Rect(WIDTH//2 - 148, btn_top + i * 76, 296, 66).collidepoint(mx, my):
+                    for i, btn_rect in enumerate(_menu_button_rects()):
+                        if btn_rect.collidepoint(mx, my):
                             selected_idx = i
                             if options[selected_idx].get("type") == "trivia":
                                 if pending_trivia_questions:
                                     TRIVIA_QUESTIONS[:] = pending_trivia_questions
                                 game_state = GameState.PLAYING_TRIVIA
                                 current_question_idx = 0
+                                trivia_question_start = time.time()
                             else:
                                 cards, game_state, start_time, paused_time = create_board(game_images, options[selected_idx]["pairs"]), GameState.PLAYING, time.time(), 0
                 elif game_state == GameState.PLAYING_TRIVIA:
-                    q_data = TRIVIA_QUESTIONS[current_question_idx]
-                    _, start_y = get_trivia_layout()
-                    for i in range(4):
-                        opt_rect = pygame.Rect(WIDTH//2 - 185, start_y + i*82, 370, 66)
-                        if opt_rect.collidepoint(mx, my):
-                            if i == q_data["answer"]:
-                                correct_anim_start = time.time()
-                                correct_anim_pos = opt_rect.center
-                                game_state = GameState.TRIVIA_CORRECT
-                            else:
-                                game_state = GameState.TRIVIA_FAIL_FADE
-                                transition_start_time = time.time()
-                                trigger_vibration()
+                    # Auto Win for trivia
+                    if pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38).collidepoint(mx, my):
+                        completed_games.add(selected_idx)
+                        game_state = GameState.TRANSITION_TO_REWARD
+                        transition_start_time = time.time()
+                        transition_particles = []
+                    else:
+                        q_data = TRIVIA_QUESTIONS[current_question_idx]
+                        _, start_y = get_trivia_layout()
+                        for i in range(4):
+                            opt_rect = pygame.Rect(WIDTH//2 - 185, start_y + i*82, 370, 66)
+                            if opt_rect.collidepoint(mx, my):
+                                if i == q_data["answer"]:
+                                    correct_anim_start = time.time()
+                                    correct_anim_pos = opt_rect.center
+                                    game_state = GameState.TRIVIA_CORRECT
+                                else:
+                                    game_state = GameState.TRIVIA_FAIL_FADE
+                                    transition_start_time = time.time()
+                                    trigger_vibration()
                 elif game_state == GameState.PLAYING and wait_timer <= 0:
                     if pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38).collidepoint(mx, my):
                         for c in cards: c["matched"] = True
@@ -1847,6 +2134,11 @@ async def _main():
                             card["flipped"] = True
                             if not first: first = card
                             elif not second: second, wait_timer = card, 0.7
+                elif game_state == GameState.SECRET_REWARD:
+                    if menu_button_rect and menu_button_rect.collidepoint(mx, my):
+                        game_state = GameState.MENU
+                        selected_idx = None
+                        menu_button_rect = None
                 elif game_state == GameState.PDF_VIEWER:
                     if pdf_close_rect and pdf_close_rect.collidepoint(mx, my):
                         game_state = GameState.MENU
@@ -1855,25 +2147,30 @@ async def _main():
                     if game_state == GameState.WON and time.time() - win_animation_start_time < 0.5:
                         continue
                     if menu_button_rect and menu_button_rect.collidepoint(mx, my):
-                        if game_state == GameState.WON:
-                            if len(completed_games) == len(options):
-                                game_state = GameState.FINAL_MESSAGE
-                                transition_start_time = time.time()
-                                transition_particles = []
-                            else:
-                                game_state = GameState.MENU
-                                selected_idx = None
+                        if game_state == GameState.WON and len(completed_games) == len(options):
+                            game_state = GameState.FINAL_MESSAGE
+                            transition_start_time = time.time()
+                            transition_particles = []
                         else:
                             game_state = GameState.MENU
                             selected_idx = None
                         menu_button_rect = None
                         save_button_rect = None
+                    elif game_state == GameState.FINAL_MESSAGE and secret_gift_rect and secret_gift_rect.collidepoint(mx, my):
+                        game_state = GameState.SECRET_REWARD
+                        win_animation_start_time = time.time()
+                        win_particles = [{"x": random.randint(0, WIDTH), "y": random.randint(0, HEIGHT),
+                                          "size": random.uniform(1.5, 4.0), "speed": random.uniform(80, 180),
+                                          "seed": random.random(), "color": random.choice([COLOR_YELLOW, COLOR_BLUSH, COLOR_CREAM])} for _ in range(60)]
+                        menu_button_rect = None
+                        secret_gift_rect = None
                     elif game_state == GameState.GAMEOVER and save_button_rect and save_button_rect.collidepoint(mx, my):
                         if options[selected_idx].get("type") == "trivia":
                             if pending_trivia_questions:
                                 TRIVIA_QUESTIONS[:] = pending_trivia_questions
                             game_state = GameState.PLAYING_TRIVIA
                             current_question_idx = 0
+                            trivia_question_start = time.time()
                         else:
                             cards, game_state, start_time, paused_time = create_board(game_images, options[selected_idx]["pairs"]), GameState.PLAYING, time.time(), 0
                         menu_button_rect = None
