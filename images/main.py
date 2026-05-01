@@ -15,7 +15,7 @@ try:
 except ImportError:
     HAS_FITZ = False
 
-MENU_PDF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Menu", "Menu.pdf")
+MENU_PDF = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "SpaceSwarm", "Images", "Menu", "Menu.pdf")
 
 try:
     from plyer import vibrator
@@ -2966,16 +2966,21 @@ async def _main():
                 _black.fill((0, 0, 0, 255))
                 sereno_logo.blit(_black, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
                 break
-        files = {1: "massage.jpg", 2: "dinner.jpg"}
+        files = {1: "massage.jpg.jpeg", 2: "dinner.jpg"}
+        space_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "SpaceSwarm")
         for idx, fname in files.items():
-            path = os.path.join(root_path, fname)
+            path = os.path.join(space_path, fname)
             if os.path.exists(path):
                 reward_images[idx] = pygame.image.load(path).convert_alpha()
+            else:
+                path = os.path.join(space_path, "Images", fname)
+                if os.path.exists(path):
+                    reward_images[idx] = pygame.image.load(path).convert_alpha()
     except Exception: pass
 
     menu_images = []
     try:
-        menu_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "menu")
+        menu_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "SpaceSwarm", "Images", "Menu")
         if os.path.exists(menu_dir):
             for i in range(7):
                 for ext in [".jpg", ".png", ".jpeg"]:
@@ -3002,7 +3007,7 @@ async def _main():
 
     nodo_video_path = None
     try:
-        root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        root_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "SpaceSwarm")
         video_dir = os.path.join(root_path, "Video")
         if not os.path.exists(video_dir):
             video_dir = os.path.join(root_path, "video")
