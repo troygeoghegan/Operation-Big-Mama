@@ -61,6 +61,7 @@ class GameState(Enum):
     MENU = auto()
     PLAYING = auto()
     PLAYING_TRIVIA = auto()
+    PLAYING_PUZZLE = auto()
     MODAL = auto()
     GAMEOVER = auto()
     TRANSITION_TO_REWARD = auto()
@@ -75,29 +76,29 @@ class GameState(Enum):
 
 TRIVIA_QUESTIONS = [
     {
-        "question": "For 5 MINUTES: Which of these is the most essential component of a good nap?",
-        "options": ["A) A loud alarm clock", "B) A cozy blanket", "C) Bright sunlight", "D) A strong cup of coffee"],
+        "question": "Which of these is the ultimate brunch beverage?",
+        "options": ["Tap water", "Mimosas", "Warm milk", "Pickle juice"],
         "answer": 1
     },
     {
-        "question": "For 10 MINUTES: What is the optimal length for a 'power nap'?",
-        "options": ["A) 5 minutes", "B) 10-20 minutes", "C) 2 hours", "D) 4 hours"],
+        "question": "What time is the socially acceptable hour to start eating brunch?",
+        "options": ["6:00 AM", "10:00 AM to 2:00 PM", "4:00 PM", "Midnight"],
         "answer": 1
     },
     {
-        "question": "For 15 MINUTES: What is the best place to take a nap?",
-        "options": ["A) On a bed of nails", "B) In the kitchen", "C) A comfy couch or bed", "D) While standing up"],
+        "question": "What are River and McKenna's favourite colours combined?",
+        "options": ["Peach", "Coral", "Light Orange", "Apricot"],
+        "answer": 0
+    },
+    {
+        "question": "What is the number of the Twins SIN's added together",
+        "options": ["648345911", "985549843", "296632516", "468830127"],
         "answer": 2
     },
     {
-        "question": "For 30 MINUTES: If someone interrupts a nap, the correct response is:",
-        "options": ["A) Thank them", "B) Give them a chore", "C) Apologize", "D) Go back to sleep"],
-        "answer": 3
-    },
-    {
-        "question": "For 1 HOUR: Who is the most deserving of a peaceful nap right now?",
-        "options": ["A) The neighbors", "B) The dog", "C) Mom", "D) The TV"],
-        "answer": 2
+        "question": "River and McKenna Love ______ the most.",
+        "options": ["Unicorns", "Mama", "Tractors", "Drums"],
+        "answer": 1
     }
 ]
 
@@ -121,10 +122,10 @@ def fetch_gemini_trivia():
         Each object must have exactly this structure:
         {
             "question": "The question text?",
-            "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
+            "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
             "answer": 1
         }
-        The 'answer' should be the integer index (0-3) of the correct option.
+        Do NOT prefix options with letters like "A)" or "B)". The 'answer' should be the integer index (0-3) of the correct option.
         """
         
         response = client.models.generate_content(
@@ -147,8 +148,8 @@ except Exception:
     pass
 
 REWARDS = {
-    0: "Enjoy a well-deserved nap!",
-    1: "You've earned a relaxing massage!",
+    0: "",
+    1: "",
     2: "A delicious dinner is waiting for you!"
 }
 
@@ -221,6 +222,65 @@ def draw_vector_heart(surf, x, y, size, color, alpha=255):
 
 _btn_text_cache = {}
 
+def _draw_brunch_item(surf, item_type, cx, cy, scale, alpha):
+    """Draws a brunch-themed sticker icon."""
+    s = max(0.1, scale)
+    if alpha < 1: return
+
+    if item_type == 0:  # Croissant
+        temp_surf = pygame.Surface((int(60 * s), int(40 * s)), pygame.SRCALPHA)
+        body_color = (214, 156, 70)
+        line_color = (139, 90, 40)
+        body_rect = pygame.Rect(int(10 * s), 0, int(40 * s), int(25 * s))
+        pygame.draw.arc(temp_surf, body_color, body_rect, 0, math.pi, int(12 * s))
+        pygame.draw.arc(temp_surf, line_color, body_rect, 0, math.pi, int(2 * s))
+        for i in range(3):
+            start, end = 0.5 + i * 0.7, 0.8 + i * 0.7
+            pygame.draw.arc(temp_surf, line_color, body_rect.inflate(int(-10 * s), int(-10 * s)), start, end, int(1.5 * s))
+        temp_surf.set_alpha(alpha)
+        surf.blit(temp_surf, (cx - 30 * s, cy - 20 * s))
+
+    elif item_type == 1:  # Coffee Cup
+        temp_surf = pygame.Surface((int(60 * s), int(60 * s)), pygame.SRCALPHA)
+        tx, ty = 30 * s, 40 * s
+        cup_w_top, cup_w_bot, cup_h = 30 * s, 20 * s, 25 * s
+        cup_pts = [(tx - cup_w_top / 2, ty - cup_h / 2), (tx + cup_w_top / 2, ty - cup_h / 2),
+                   (tx + cup_w_bot / 2, ty + cup_h / 2), (tx - cup_w_bot / 2, ty + cup_h / 2)]
+        pygame.draw.polygon(temp_surf, (240, 240, 255), cup_pts)
+        pygame.draw.polygon(temp_surf, COLOR_OUTLINE, cup_pts, int(2 * s))
+        pygame.draw.ellipse(temp_surf, COLOR_OUTLINE, (tx - cup_w_top / 2, ty - cup_h / 2 - 3 * s, cup_w_top, 6 * s), int(2 * s))
+        pygame.draw.arc(temp_surf, COLOR_OUTLINE, (tx + cup_w_top / 2 - 2 * s, ty - cup_h / 4, 12 * s, 15 * s), -math.pi / 2, math.pi / 2, int(3 * s))
+        for i in range(3):
+            sx = tx - 8 * s + i * 8 * s
+            sy = ty - cup_h / 2 - 5 * s
+            pts = [(sx + math.sin(time.time() * 4 + i) * 2 * s, sy - j * 4 * s) for j in range(4)]
+            if len(pts) > 1: pygame.draw.lines(temp_surf, (200, 200, 210), False, pts, int(2 * s))
+        temp_surf.set_alpha(alpha)
+        surf.blit(temp_surf, (cx - 30 * s, cy - 40 * s))
+
+    else:  # Mimosa
+        temp_surf = pygame.Surface((int(40 * s), int(80 * s)), pygame.SRCALPHA)
+        tx, ty = 20 * s, 25 * s
+        glass_h, glass_w = 40 * s, 18 * s
+        bowl_pts = [(tx - glass_w / 2, ty - glass_h / 2), (tx + glass_w / 2, ty - glass_h / 2), (tx, ty)]
+        pygame.draw.polygon(temp_surf, (200, 220, 255, 70), bowl_pts)
+        drink_h, drink_w = glass_h * 0.8, glass_w * 0.9
+        drink_pts = [(tx - drink_w / 2, ty - glass_h / 2 + (glass_h - drink_h)),
+                     (tx + drink_w / 2, ty - glass_h / 2 + (glass_h - drink_h)), (tx, ty)]
+        pygame.draw.polygon(temp_surf, (255, 180, 70), drink_pts)
+        for _ in range(3):
+            pygame.draw.circle(temp_surf, (255, 220, 150),
+                               (tx + random.uniform(-drink_w / 3, drink_w / 3), ty - random.uniform(0, drink_h * 0.7)),
+                               random.uniform(1, 2) * s)
+        stem_y_end = ty + 20 * s
+        pygame.draw.line(temp_surf, COLOR_OUTLINE, (tx, ty), (tx, stem_y_end), int(2 * s))
+        pygame.draw.ellipse(temp_surf, COLOR_OUTLINE, (tx - 12 * s, stem_y_end - 2 * s, 24 * s, 4 * s), int(2 * s))
+        pygame.draw.polygon(temp_surf, COLOR_OUTLINE, bowl_pts, int(2 * s))
+        temp_surf.set_alpha(alpha)
+        surf.blit(temp_surf, (cx - 20 * s, cy - 40 * s))
+
+_btn_text_cache = {}
+
 def draw_crafted_button(screen, rect, text, font, base_color):
     mx, my = pygame.mouse.get_pos()
     is_hover = rect.collidepoint(mx, my)
@@ -234,11 +294,24 @@ def draw_crafted_button(screen, rect, text, font, base_color):
     pygame.draw.rect(screen, base_color,   btn, border_radius=r)
     # Outline
     pygame.draw.rect(screen, COLOR_OUTLINE, btn, 4, border_radius=r)
-    # Soft shine ellipse clipped to top of pill — no rectangle overflow
-    shine_surf = pygame.Surface((btn.width - 8, btn.height), pygame.SRCALPHA)
-    shine_rect = pygame.Rect(btn.width // 6, 3, btn.width // 2, btn.height // 3)
-    pygame.draw.ellipse(shine_surf, (255, 255, 255, 70), shine_rect)
-    screen.blit(shine_surf, (btn.x + 4, btn.y))
+    # Glossy gradient highlight — bright at top, fading down
+    inset = 5
+    sw, sh = btn.width - inset * 2, btn.height // 2
+    if sw > 0 and sh > 0:
+        shine_surf = pygame.Surface((btn.width, btn.height), pygame.SRCALPHA)
+        # Build vertical gradient from white-90 at top to transparent
+        grad = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        for row in range(sh):
+            alpha = int(90 * (1 - row / sh) ** 1.5)
+            pygame.draw.line(grad, (255, 255, 255, alpha), (0, row), (sw - 1, row))
+        # Pill-shaped mask so gradient stays inside the button
+        mask = pygame.Surface((btn.width, btn.height), pygame.SRCALPHA)
+        pygame.draw.rect(mask, (255, 255, 255, 255),
+                         (inset, inset, sw, btn.height - inset * 2),
+                         border_radius=max(1, r - inset))
+        shine_surf.blit(grad, (inset, inset))
+        shine_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+        screen.blit(shine_surf, (btn.x, btn.y))
 
     lines = wrap_text(text, font, btn.width - 20)
     line_h = font.get_height()
@@ -297,16 +370,29 @@ def _draw_star(surf, x, y, r, color):
     pygame.draw.polygon(surf, COLOR_OUTLINE, pts, max(1, r//3))
 
 def _draw_banner(surf, rect, color=None):
-    """Hot-pink pill banner with shadow, outline, and shine strip."""
+    """Hot-pink pill banner with shadow, outline, and glossy gradient highlight."""
     if color is None:
         color = COLOR_BLUSH
     r = rect.height // 2
     pygame.draw.rect(surf, COLOR_SHADOW, (rect.x+5, rect.y+7, rect.width, rect.height), border_radius=r)
     pygame.draw.rect(surf, color,        rect,                                            border_radius=r)
     pygame.draw.rect(surf, COLOR_OUTLINE, rect, 4,                                        border_radius=r)
-    shine = pygame.Surface((max(1, rect.width-24), max(1, rect.height//3)), pygame.SRCALPHA)
-    shine.fill((255, 255, 255, 65))
-    surf.blit(shine, (rect.x+12, rect.y+8))
+
+    inset = 5
+    sw, sh = rect.width - inset * 2, rect.height // 2
+    if sw > 0 and sh > 0:
+        shine_surf = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+        grad = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        for row in range(sh):
+            alpha = int(90 * (1 - row / sh) ** 1.5)
+            pygame.draw.line(grad, (255, 255, 255, alpha), (0, row), (sw - 1, row))
+        mask = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+        pygame.draw.rect(mask, (255, 255, 255, 255),
+                         (inset, inset, sw, rect.height - inset * 2),
+                         border_radius=max(1, r - inset))
+        shine_surf.blit(grad, (inset, inset))
+        shine_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+        surf.blit(shine_surf, (rect.x, rect.y))
 
 def _menu_button_rects():
     """Shared menu button geometry — used by both draw_menu and click handler."""
@@ -316,13 +402,13 @@ def _menu_button_rects():
 
 def get_trivia_layout():
     """Return (q_rect, start_y) based on current font so banner+card+answers all fit."""
-    if font_win is None:
-        return pygame.Rect(10, 80, WIDTH-20, 110), 215
-    lines = wrap_text("Who Wants to Win a Nap?", font_win, WIDTH-48)
-    banner_h = font_win.get_height() * len(lines) + 22
-    q_top = banner_h + 10
-    q_rect = pygame.Rect(10, q_top, WIDTH-20, 110)
-    return q_rect, q_rect.bottom + 12
+    banner_y = 70
+    if font_win is None or font_ui is None:
+        return pygame.Rect(10, banner_y + 80, WIDTH-20, 130), banner_y + 240
+    banner_h = font_ui.get_height() + font_win.get_height() + 22
+    q_top = banner_y + banner_h + 40
+    q_rect = pygame.Rect(10, q_top, WIDTH-20, 130)
+    return q_rect, q_rect.bottom + 40
 
 class CraftedBackground:
     def __init__(self):
@@ -355,7 +441,7 @@ class CraftedBackground:
 
         # Flowers along front hill (fixed x, y derived each frame from hill curve)
         self.flowers = [{"x": random.uniform(10, WIDTH-10),
-                         "kind": random.randint(0, 2),
+                         "kind": random.choices([0, 1, 2], weights=[60, 20, 20])[0],
                          "sz": random.randint(3, 6)} for _ in range(28)]
 
     # ── helpers ──────────────────────────────────────────────────────────────
@@ -368,13 +454,26 @@ class CraftedBackground:
             surf.blit(s, (cx+ox-rr, cy+oy-rr))
 
     def _flower(self, surf, x, y, kind, sz):
-        petal = [(255,140,180),(255,255,255),(255,222,80)][kind]
-        centre= [(255,220,0), (255,210,0),(255,160,20)][kind]
-        for ang in range(0, 360, 60):
-            rad = math.radians(ang)
-            pygame.draw.circle(surf, petal,
-                               (int(x+math.cos(rad)*(sz+1)), int(y+math.sin(rad)*(sz+1))), sz)
-        pygame.draw.circle(surf, centre, (int(x), int(y)), max(1, sz-1))
+        petal = [(220, 40, 80), (255, 255, 255), (200, 160, 255)][kind]
+        centre = [(255, 140, 180), (255, 210, 0), (255, 240, 0)][kind]
+        
+        if kind == 0: # Rose
+            for ang in range(0, 360, 72):
+                rad = math.radians(ang)
+                pygame.draw.circle(surf, petal, (int(x+math.cos(rad)*sz), int(y+math.sin(rad)*sz)), sz)
+            for ang in range(36, 360, 90):
+                rad = math.radians(ang)
+                pygame.draw.circle(surf, centre, (int(x+math.cos(rad)*(sz*0.6)), int(y+math.sin(rad)*(sz*0.6))), max(1, int(sz*0.8)))
+        elif kind == 1: # Fluffy complementary
+            for ang in range(0, 360, 45):
+                rad = math.radians(ang)
+                pygame.draw.circle(surf, petal, (int(x+math.cos(rad)*(sz*1.2)), int(y+math.sin(rad)*(sz*1.2))), max(1, sz-1))
+            pygame.draw.circle(surf, centre, (int(x), int(y)), max(1, sz))
+        else: # Daisy
+            for ang in range(0, 360, 30):
+                rad = math.radians(ang)
+                pygame.draw.circle(surf, petal, (int(x+math.cos(rad)*(sz*1.5)), int(y+math.sin(rad)*(sz*1.5))), max(1, sz//2))
+            pygame.draw.circle(surf, centre, (int(x), int(y)), max(1, sz))
 
     # ── main draw ────────────────────────────────────────────────────────────
 
@@ -387,18 +486,16 @@ class CraftedBackground:
             drift = math.sin(t*0.055 + i*1.85) * 9
             self._cloud(surf, int(bx+drift), by, bw)
 
-        # Hill layer 1 — back, lightest
+        # Hill layer 1 — back, lightest (simplified)
         h1 = int(HEIGHT*0.50)
-        pts1 = [(0,h1+50),(WIDTH//7,h1-18),(2*WIDTH//7,h1+32),(3*WIDTH//7,h1-42),
-                (4*WIDTH//7,h1+18),(5*WIDTH//7,h1-28),(6*WIDTH//7,h1+28),
-                (WIDTH,h1+8),(WIDTH,HEIGHT),(0,HEIGHT)]
+        pts1 = [(0,h1+30),(WIDTH//3,h1-15),(2*WIDTH//3,h1-10),
+                (WIDTH,h1+20),(WIDTH,HEIGHT),(0,HEIGHT)]
         pygame.draw.polygon(surf, COLOR_GRASS_BACK, pts1)
 
-        # Hill layer 2 — mid
+        # Hill layer 2 — mid (simplified)
         h2 = int(HEIGHT*0.60)
-        pts2 = [(0,h2+22),(WIDTH//5,h2-52),(2*WIDTH//5,h2+14),(WIDTH//2,h2-44),
-                (3*WIDTH//5,h2+18),(4*WIDTH//5,h2-48),(WIDTH,h2+10),
-                (WIDTH,HEIGHT),(0,HEIGHT)]
+        pts2 = [(0,h2+15),(WIDTH//4,h2-40),(WIDTH//2,h2-25),(3*WIDTH//4,h2-35),
+                (WIDTH,h2+10),(WIDTH,HEIGHT),(0,HEIGHT)]
         pygame.draw.polygon(surf, COLOR_GRASS, pts2)
 
         # Cream ground strip — fills all the way to bottom
@@ -431,20 +528,165 @@ class CraftedBackground:
             draw_vector_heart(surf, int(p["x"]+sway), int(p["y"]),
                               p["size"], p["color"], 195)
 
+def _build_reward_takeover(title, photo_img, info1, info2, logo_img=None):
+    """Themed full-screen reward card: banner + photo + reservation info. Shared across games."""
+    W, H = 400, 780
+    surf = pygame.Surface((W, H), pygame.SRCALPHA)
+
+    body = pygame.Rect(6, 8, W - 12, H - 16)
+    pygame.draw.rect(surf, (*COLOR_SHADOW, 160), body.move(4, 6), border_radius=22)
+    pygame.draw.rect(surf, COLOR_CREAM, body, border_radius=22)
+    pygame.draw.rect(surf, COLOR_OUTLINE, body, 5, border_radius=22)
+
+    banner_rect = pygame.Rect(body.x + 16, body.y + 18, body.width - 32, 60)
+    _draw_banner(surf, banner_rect, COLOR_BLUSH)
+    _draw_star(surf, banner_rect.x + 20, banner_rect.centery, 7, COLOR_YELLOW)
+    _draw_star(surf, banner_rect.right - 20, banner_rect.centery, 7, COLOR_YELLOW)
+    draw_soft_text(surf, title, font_win, COLOR_CREAM,
+                   (banner_rect.centerx, banner_rect.centery),
+                   max_width=banner_rect.width - 60)
+
+    info_h = 160 if logo_img is not None else 120
+    info_y = body.bottom - info_h
+    photo_top = banner_rect.bottom + 18
+    photo_area = pygame.Rect(body.x + 20, photo_top,
+                             body.width - 40, info_y - photo_top - 14)
+
+    if photo_img is not None:
+        pw, ph = photo_img.get_size()
+        src_aspect = pw / ph
+        dst_aspect = photo_area.width / photo_area.height
+        if src_aspect > dst_aspect:
+            src_h = ph
+            src_w = int(ph * dst_aspect)
+            src_rect = pygame.Rect((pw - src_w) // 2, 0, src_w, src_h)
+        else:
+            src_w = pw
+            src_h = int(pw / dst_aspect)
+            src_rect = pygame.Rect(0, (ph - src_h) // 2, src_w, src_h)
+        cropped = pygame.Surface((src_rect.width, src_rect.height), pygame.SRCALPHA)
+        cropped.blit(photo_img, (0, 0), src_rect)
+        scaled = pygame.transform.smoothscale(cropped, photo_area.size)
+
+        photo_surf = pygame.Surface(photo_area.size, pygame.SRCALPHA)
+        photo_surf.blit(scaled, (0, 0))
+        mask = pygame.Surface(photo_area.size, pygame.SRCALPHA)
+        pygame.draw.rect(mask, (255, 255, 255, 255),
+                         pygame.Rect(0, 0, photo_area.width, photo_area.height),
+                         border_radius=16)
+        photo_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+        surf.blit(photo_surf, photo_area.topleft)
+    else:
+        pygame.draw.rect(surf, (*COLOR_BLUSH, 40), photo_area, border_radius=16)
+        draw_vector_heart(surf, photo_area.centerx, photo_area.centery,
+                          photo_area.height / 80.0, COLOR_BLUSH)
+    pygame.draw.rect(surf, COLOR_OUTLINE, photo_area, 4, border_radius=16)
+
+    info_cx = body.centerx
+    line1 = font_ui.render(info1, True, COLOR_OUTLINE)
+    surf.blit(line1, (info_cx - line1.get_width() // 2, info_y + 24))
+
+    if logo_img is not None:
+        max_w, max_h = body.width - 80, 80
+        lw, lh = logo_img.get_size()
+        scale = min(max_w / lw, max_h / lh)
+        scaled_logo = pygame.transform.smoothscale(logo_img,
+                                                   (max(1, int(lw * scale)),
+                                                    max(1, int(lh * scale))))
+        logo_y = info_y + 24 + line1.get_height() + 12
+        surf.blit(scaled_logo,
+                  (info_cx - scaled_logo.get_width() // 2, logo_y))
+    elif info2:
+        line2 = font_ui.render(info2, True, COLOR_OUTLINE)
+        surf.blit(line2, (info_cx - line2.get_width() // 2, info_y + 24 + line1.get_height() + 8))
+
+    return surf
+
+
+def _generate_brunch_reservation_card():
+    """Mother's Day brunch reservation card: banner + salad hero photo + reservation line."""
+    W, H = 480, 620
+    surf = pygame.Surface((W, H), pygame.SRCALPHA)
+
+    body = pygame.Rect(8, 10, W - 16, H - 24)
+    pygame.draw.rect(surf, (*COLOR_SHADOW, 160), body.move(5, 7), border_radius=22)
+    pygame.draw.rect(surf, COLOR_CREAM,  body, border_radius=22)
+    pygame.draw.rect(surf, COLOR_OUTLINE, body, 5, border_radius=22)
+
+    # Top banner
+    banner_rect = pygame.Rect(body.x + 18, body.y + 22, body.width - 36, 68)
+    _draw_banner(surf, banner_rect, COLOR_BLUSH)
+    _draw_star(surf, banner_rect.x + 22,     banner_rect.centery, 8, COLOR_YELLOW)
+    _draw_star(surf, banner_rect.right - 22, banner_rect.centery, 8, COLOR_YELLOW)
+    draw_soft_text(surf, "MOTHER'S DAY BRUNCH", font_win, COLOR_CREAM,
+                   (banner_rect.centerx, banner_rect.centery),
+                   max_width=banner_rect.width - 70)
+
+    # Hero photo: salad. Cropped to a square and framed with the cartoon outline.
+    photo_rect = pygame.Rect(0, 0, 360, 360)
+    photo_rect.center = (body.centerx, banner_rect.bottom + 30 + photo_rect.height // 2)
+    try:
+        img_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brunch2.jpeg")
+        photo = pygame.image.load(img_path).convert_alpha()
+        # Centre-crop to square so the bowl stays centred
+        pw, ph = photo.get_size()
+        side = min(pw, ph)
+        crop_rect = pygame.Rect((pw - side) // 2, (ph - side) // 2, side, side)
+        sq = pygame.Surface((side, side), pygame.SRCALPHA)
+        sq.blit(photo, (0, 0), crop_rect)
+        scaled = pygame.transform.smoothscale(sq, (photo_rect.width, photo_rect.height))
+        # Rounded mask so the photo sits nicely inside the cartoon outline
+        mask = pygame.Surface((photo_rect.width, photo_rect.height), pygame.SRCALPHA)
+        pygame.draw.rect(mask, (255, 255, 255, 255),
+                         mask.get_rect(), border_radius=18)
+        scaled.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+        surf.blit(scaled, photo_rect.topleft)
+    except Exception:
+        # Fallback: blush placeholder if the image fails to load
+        pygame.draw.rect(surf, (*COLOR_BLUSH, 60), photo_rect, border_radius=18)
+    pygame.draw.rect(surf, COLOR_OUTLINE, photo_rect, 4, border_radius=18)
+
+    # Reservation line under the photo
+    info_y = photo_rect.bottom + 40
+    draw_soft_text(surf, "Table for Four", font_win, COLOR_OUTLINE,
+                   (body.centerx, info_y),
+                   max_width=body.width - 40)
+    draw_soft_text(surf, "@ 11:00 am", font_win, COLOR_BLUSH,
+                   (body.centerx, info_y + 44),
+                   max_width=body.width - 40)
+
+    # Hearts at bottom
+    for x in (body.centerx - 70, body.centerx, body.centerx + 70):
+        draw_vector_heart(surf, x, body.bottom - 26, 0.8, COLOR_BLUSH)
+
+    return surf
+
+
 def load_images():
     imgs = []
+    valid = (".png", ".jpg", ".jpeg")
     IMAGE_FOLDER = os.path.dirname(os.path.abspath(__file__))
-    if os.path.exists(IMAGE_FOLDER):
-        valid = (".png", ".jpg", ".jpeg")
-        files = [f for f in os.listdir(IMAGE_FOLDER) if f.lower().endswith(valid)]
-        files.sort()
-        for f in files:
-            try:
-                img = pygame.image.load(os.path.join(IMAGE_FOLDER, f)).convert_alpha()
-                img = pygame.transform.smoothscale(img, (SIDE-10, SIDE-10))
-                imgs.append(img)
-                if len(imgs) == 9: break
-            except: continue
+    KIDS_FOLDER = os.path.join(IMAGE_FOLDER, "kids")
+    sources = []
+    if os.path.isdir(KIDS_FOLDER):
+        kids = [os.path.join(KIDS_FOLDER, f) for f in os.listdir(KIDS_FOLDER)
+                if f.lower().endswith(valid)]
+        random.shuffle(kids)
+        sources.extend(kids)
+    if os.path.isdir(IMAGE_FOLDER):
+        extras = sorted(f for f in os.listdir(IMAGE_FOLDER) if f.lower().endswith(valid))
+        sources.extend(os.path.join(IMAGE_FOLDER, f) for f in extras)
+    for path in sources:
+        try:
+            img = pygame.image.load(path).convert_alpha()
+            w, h = img.get_size()
+            side = min(w, h)
+            square = pygame.Surface((side, side), pygame.SRCALPHA)
+            square.blit(img, (0, 0), pygame.Rect((w - side) // 2, (h - side) // 2, side, side))
+            img = pygame.transform.smoothscale(square, (SIDE-10, SIDE-10))
+            imgs.append(img)
+            if len(imgs) == 9: break
+        except: continue
                 
     heart_colors = [
         (235, 196, 196), (226, 172, 166), (200, 185, 220),
@@ -667,19 +909,31 @@ massage_video_path = None
 
 landscape_ready_start = 0.0
 
-options = [{"text": "Nap Time", "limit": None, "pairs": 6, "type": "trivia"}, {"text": "Massage", "limit": 120, "pairs": 6, "type": "memory"}, {"text": "Dinner", "limit": 45, "pairs": 9, "type": "memory"}]
+options = [{"text": "Brunch", "limit": None, "pairs": 6, "type": "trivia"}, {"text": "Massage", "limit": 180, "type": "puzzle"}, {"text": "Dinner", "limit": 45, "pairs": 9, "type": "memory"}]
 selected_idx = None
 game_state = GameState.ORIENTATION_PROMPT if IS_WEB else GameState.MENU
 completed_games = set()
 secret_button_appear_time = 0
 secret_unlocked_seen = False
 cards, first, second, wait_timer = [], None, None, 0
+puzzle_tiles = []
+puzzle_tile_images = []
+puzzle_anim = {}
+puzzle_full_image = None
+puzzle_preview_start = None
+puzzle_move_count = 0
+hint_button_reveal_time = None
+hint_popup_start = None
+hint_click_count = 0
+PUZZLE_TILE_PX = 0
+PUZZLE_BOARD_PX = 0
+PUZZLE_BOARD_X = 0
+PUZZLE_BOARD_Y = 0
 start_time, paused_time, modal_image, modal_start_time = 0, 0, None, 0
 win_animation_start_time = 0
 win_particles = []
 current_question_idx = 0
 trivia_question_start = 0
-TRIVIA_TIME_LIMIT = 30
 prev_game_state_before_landscape = None
 _prompt_start = None
 _menu_enter_time = None
@@ -950,125 +1204,417 @@ def draw_landscape_ready(screen, dt, elapsed):
             screen.blit(s, (cx - s.get_width()//2, yo))
 
 
+def _draw_speech_bubble(surf, cx, cy, text, font_size, outline_col, bg_col, flip=False):
+    """Draw a cute cartoon speech bubble with text. flip=True puts tail on left."""
+    # Create a temporary font for the text
+    bubble_font = pygame.font.SysFont(None, font_size)
+    text_surf = bubble_font.render(text, True, (255, 255, 255))
+    text_w, text_h = text_surf.get_size()
+
+    # Bubble dimensions with padding
+    pad_x, pad_y = 12, 8
+    bubble_w = text_w + pad_x * 2
+    bubble_h = text_h + pad_y * 2
+
+    # Create bubble surface
+    bubble_surf = pygame.Surface((bubble_w + 30, bubble_h + 20), pygame.SRCALPHA)
+
+    # Draw tail (pointer)
+    if flip:
+        tail_pts = [(30, bubble_h), (10, bubble_h + 15), (20, bubble_h)]
+    else:
+        tail_pts = [(bubble_w - 30, bubble_h), (bubble_w - 10, bubble_h + 15), (bubble_w - 20, bubble_h)]
+
+    # Filled tail and bubble
+    bubble_rect = pygame.Rect(0, 0, bubble_w, bubble_h)
+    pygame.draw.polygon(bubble_surf, bg_col, tail_pts)
+    pygame.draw.rect(bubble_surf, bg_col, bubble_rect, border_radius=12)
+
+    # Draw text inside bubble
+    text_x = pad_x
+    text_y = pad_y
+    bubble_surf.blit(text_surf, (text_x, text_y))
+
+    # Blit to main surface, positioned at center-top of bubble
+    surf.blit(bubble_surf, (cx - bubble_w // 2, cy - bubble_h - 5))
+
+
+
+
 def _draw_unicorn(surf, anim_t):
-    """16-bit style unicorn: enters left, pauses, winks, exits right. Loops ~9 s."""
-    CYCLE  = 9.0
-    t      = anim_t % CYCLE
+    """Sticker-style unicorn with recognizable horse silhouette."""
+    CYCLE = 8.0
+    t = anim_t % CYCLE
+    OL = COLOR_OUTLINE
 
-    GY     = int(HEIGHT * 0.78)   # feet level
-    STOP_X = int(WIDTH  * 0.28)   # body-center x where it pauses
+    GY = int(HEIGHT * 0.65)
+    STOP_X = int(WIDTH * 0.28)
 
-    if t < 2.8:
-        cx_body = int(-80 + (STOP_X + 80) * (t / 2.8))
-        walking, wink = True, False
-    elif t < 4.5:
-        cx_body = STOP_X
-        walking, wink = False, False
-    elif t < 5.2:
-        cx_body = STOP_X
-        walking, wink = False, True
+    if t < 2.5:
+        cx = int(-80 + (STOP_X + 80) * (t / 2.5))
+        walking, wink, looking = True, False, False
+    elif t < 3.2:
+        cx, walking, wink, looking = STOP_X, False, False, True
+    elif t < 4.2:
+        cx, walking, wink, looking = STOP_X, False, False, True
+    elif t < 4.8:
+        cx, walking, wink, looking = STOP_X, False, True, False
     else:
-        cx_body = int(STOP_X + (WIDTH + 120 - STOP_X) * ((t - 5.2) / (CYCLE - 5.2)))
-        walking, wink = True, False
+        cx = int(STOP_X + (WIDTH + 100 - STOP_X) * ((t - 4.8) / (CYCLE - 4.8)))
+        walking, wink, looking = True, False, False
 
-    # palette
-    WHITE   = (252, 252, 252)
-    OUTLINE = (22,  10,  52)
-    PINK    = (255, 80,  180)
-    PURPLE  = (190, 70,  255)
-    GOLD    = (255, 215, 0)
-    HOOF    = (195, 155, 215)
-    NOSE    = (255, 175, 195)
-    MANE_COLS = [PINK, PURPLE, GOLD]
-
-    BW, BH = 60, 32
-    LH, LW = 16, 7
-    HR     = 16
-
-    bx = cx_body - BW // 2
-    by = GY - LH - BH
-
-    # tail (behind body)
-    for ti, tc in enumerate(MANE_COLS):
-        tpx = bx - 4 - ti * 4
-        tpy = by + BH // 2 + ti * 8
-        pygame.draw.circle(surf, OUTLINE, (tpx, tpy), 7)
-        pygame.draw.circle(surf, tc,      (tpx, tpy), 6)
-
-    # legs — trapezoid per leg so they swing at the foot
-    hip_xs = [bx + 8, bx + 16, bx + 40, bx + 48]
-    for i, hx in enumerate(hip_xs):
-        swing = int(math.sin(anim_t * 10 + i * math.pi / 2) * 7) if walking else 0
-        fx = hx + swing
-        hy = by + BH
-        pts  = [(hx - LW//2,     hy), (hx + LW//2 + 1, hy),
-                (fx + LW//2 + 1, GY), (fx - LW//2,     GY)]
-        inner= [(hx - LW//2 + 1, hy + 1), (hx + LW//2,     hy + 1),
-                (fx + LW//2,     GY - 1), (fx - LW//2 + 1, GY - 1)]
-        pygame.draw.polygon(surf, OUTLINE, pts)
-        pygame.draw.polygon(surf, WHITE,   inner)
-        pygame.draw.rect(surf, OUTLINE, (fx - LW//2 - 1, GY - 5, LW + 2, 6), border_radius=2)
-        pygame.draw.rect(surf, HOOF,    (fx - LW//2,     GY - 4, LW,     4), border_radius=2)
-
-    # body
-    pygame.draw.rect(surf, OUTLINE, (bx - 2, by - 2, BW + 4, BH + 4), border_radius=12)
-    pygame.draw.rect(surf, WHITE,   (bx,     by,     BW,     BH),     border_radius=10)
-
-    # neck (circle chain)
-    ncx, ncy = bx + BW + 6, by + 8
-    for ns in range(5):
-        f   = ns / 4
-        nx_ = int(ncx + f * 12)
-        ny_ = int(ncy - f * 14)
-        nr  = int(12 - f * 3)
-        pygame.draw.circle(surf, OUTLINE, (nx_, ny_), nr + 2)
-        pygame.draw.circle(surf, WHITE,   (nx_, ny_), nr)
-
-    # head
-    hcx = ncx + 22
-    hcy = ncy - 20
-    pygame.draw.circle(surf, OUTLINE, (hcx, hcy), HR + 2)
-    pygame.draw.circle(surf, WHITE,   (hcx, hcy), HR)
-
-    # snout
-    pygame.draw.ellipse(surf, OUTLINE, (hcx + 5,  hcy + 2, 16, 12))
-    pygame.draw.ellipse(surf, WHITE,   (hcx + 6,  hcy + 3, 14, 10))
-    pygame.draw.circle(surf,  NOSE,    (hcx + 15, hcy + 7),  2)
-
-    # eye
-    ex, ey = hcx + 4, hcy - 3
-    if wink:
-        pygame.draw.arc(surf, OUTLINE, (ex - 5, ey - 1, 11, 9), 0, math.pi, 3)
-        for la in (-2, 0, 2):
-            pygame.draw.line(surf, OUTLINE, (ex + la, ey - 1), (ex + la, ey - 5), 1)
+    if walking:
+        bounce = int(abs(math.sin(anim_t * 8)) * 4)
     else:
-        pygame.draw.circle(surf, OUTLINE,         (ex, ey), 5)
-        pygame.draw.circle(surf, (255, 255, 255), (ex, ey), 4)
-        pygame.draw.circle(surf, OUTLINE,         (ex + 1, ey), 2)
-        pygame.draw.circle(surf, (255, 255, 255), (ex + 2, ey - 1), 1)
+        bounce = int(math.sin(anim_t * 2.5) * 2)
 
-    # horn
-    tip = (hcx,     hcy - HR - 18)
-    bl  = (hcx - 5, hcy - HR + 2)
-    br  = (hcx + 8, hcy - HR + 2)
-    pygame.draw.polygon(surf, OUTLINE, [tip, bl, br])
-    pygame.draw.polygon(surf, GOLD,    [(tip[0], tip[1] + 2), (bl[0] + 1, bl[1]), (br[0] - 1, br[1])])
+    WHITE  = (255, 245, 255)
+    PINK   = (255, 100, 190)
+    PURPLE = (180, 90, 255)
+    GOLD   = (255, 212, 0)
+    BLUSH  = (255, 170, 200)
+    MANE_C = [PINK, PURPLE, GOLD]
+
+    # Drop shadow on ground
+    sh = pygame.Surface((58, 10), pygame.SRCALPHA)
+    pygame.draw.ellipse(sh, (0, 0, 0, 45), (0, 0, 58, 10))
+    surf.blit(sh, (cx - 29, GY - 3))
+
+    # --- Tail: flowing coloured curves behind body ---
+    tail_bx = cx - 26
+    tail_by = GY - 38 - bounce
+    for ti, tc in enumerate(MANE_C):
+        wave = math.sin(anim_t * 3.2 + ti * 0.9) * 7
+        pts = []
+        for s in range(6):
+            f = s / 5
+            px = int(tail_bx - 6 - ti * 3 - f * 10 + wave * f)
+            py = int(tail_by + 8 + f * 22 + ti * 4)
+            pts.append((px, py))
+        for j in range(len(pts) - 1):
+            pygame.draw.line(surf, OL, pts[j], pts[j + 1], 6)
+        for j in range(len(pts) - 1):
+            pygame.draw.line(surf, tc, pts[j], pts[j + 1], 4)
+
+    # --- Legs: four slender legs with hooves ---
+    leg_anchors = [(-18, 0), (-8, 2), (10, 2), (20, 0)]
+    for li, (lox, loy) in enumerate(leg_anchors):
+        phase = li * math.pi * 0.6
+        swing = int(math.sin(anim_t * 9 + phase) * 5) if walking else 0
+        hx_l = cx + lox
+        hy_top = GY - 22 - bounce + loy
+        hy_bot = GY - 2
+        fx = hx_l + swing
+        # Leg
+        pygame.draw.line(surf, OL, (hx_l, hy_top), (fx, hy_bot), 7)
+        pygame.draw.line(surf, WHITE, (hx_l, hy_top), (fx, hy_bot), 5)
+        # Hoof
+        pygame.draw.ellipse(surf, OL, (fx - 5, hy_bot - 2, 10, 6))
+        pygame.draw.ellipse(surf, BLUSH, (fx - 4, hy_bot - 1, 8, 4))
+
+    # --- Body: horizontal oval ---
+    by = GY - 42 - bounce
+    body_rect = pygame.Rect(cx - 26, by, 52, 28)
+    # Shadow
+    pygame.draw.ellipse(surf, (0, 0, 0), (body_rect.x + 2, body_rect.y + 3,
+                        body_rect.w, body_rect.h))
+    pygame.draw.ellipse(surf, OL, body_rect.inflate(4, 4))
+    pygame.draw.ellipse(surf, WHITE, body_rect)
+    # Belly shine
+    shine_r = pygame.Rect(body_rect.x + 8, body_rect.y + 4, body_rect.w - 16, 10)
+    sh_s = pygame.Surface(shine_r.size, pygame.SRCALPHA)
+    sh_s.fill((255, 255, 255, 60))
+    surf.blit(sh_s, shine_r.topleft)
+
+    # --- Neck: angled connection ---
+    neck_base_x = cx + 22
+    neck_base_y = by + 6
+    head_cx = cx + 34
+    head_cy = by - 16 + bounce
+    neck_pts = [
+        (neck_base_x - 4, neck_base_y),
+        (neck_base_x + 6, neck_base_y),
+        (head_cx + 3, head_cy + 14),
+        (head_cx - 7, head_cy + 14),
+    ]
+    pygame.draw.polygon(surf, OL, [(p[0] - 1, p[1] - 1) for p in neck_pts])
+    pygame.draw.polygon(surf, OL, [(p[0] + 1, p[1] + 1) for p in neck_pts])
+    pygame.draw.polygon(surf, WHITE, neck_pts)
+
+    # --- Head: slightly oval, not perfect circle ---
+    hx, hy = head_cx, head_cy
+    head_rect = pygame.Rect(hx - 16, hy - 14, 32, 28)
+    pygame.draw.ellipse(surf, (0, 0, 0), (head_rect.x + 2, head_rect.y + 2,
+                        head_rect.w, head_rect.h))
+    pygame.draw.ellipse(surf, OL, head_rect.inflate(4, 4))
+    pygame.draw.ellipse(surf, WHITE, head_rect)
+
+    # --- Snout: elongated bump ---
+    snout_rect = pygame.Rect(hx + 8, hy + 2, 16, 12)
+    pygame.draw.ellipse(surf, OL, snout_rect.inflate(2, 2))
+    pygame.draw.ellipse(surf, WHITE, snout_rect)
+    pygame.draw.circle(surf, BLUSH, (hx + 16, hy + 8), 2)
+    pygame.draw.circle(surf, BLUSH, (hx + 20, hy + 7), 1)
+    pygame.draw.arc(surf, OL, (hx + 10, hy + 6, 10, 7), -math.pi, 0, 2)
+
+    # --- Ear: triangular, toward back of head ---
+    ear_pts = [(hx - 6, hy - 10), (hx - 12, hy - 26), (hx + 1, hy - 20)]
+    pygame.draw.polygon(surf, OL, ear_pts)
+    pygame.draw.polygon(surf, BLUSH, [(hx - 6, hy - 11), (hx - 11, hy - 24), (hx, hy - 19)])
+
+    # --- Horn: golden, angled forward ---
+    horn_tip = (hx + 12, hy - 28)
+    horn_bl = (hx - 2, hy - 14)
+    horn_br = (hx + 6, hy - 12)
+    pygame.draw.polygon(surf, OL, [horn_tip, horn_bl, horn_br])
+    pygame.draw.polygon(surf, GOLD, [(horn_tip[0], horn_tip[1] + 2),
+                                     (horn_bl[0] + 1, horn_bl[1] - 1),
+                                     (horn_br[0] - 1, horn_br[1] - 1)])
     for si in range(4):
-        f   = (si + 1) / 5
-        sx  = int(bl[0] + (tip[0] - bl[0]) * f) + 1
-        srx = int(br[0] + (tip[0] - br[0]) * f) - 1
-        sy  = int(bl[1] + (tip[1] - bl[1]) * f)
-        pygame.draw.line(surf, MANE_COLS[si % 3], (sx, sy), (srx, sy), 1)
+        f = (si + 1) / 5
+        sy_ = int(horn_bl[1] + (horn_tip[1] - horn_bl[1]) * f)
+        sx_ = int(horn_bl[0] + (horn_tip[0] - horn_bl[0]) * f) + 1
+        srx = int(horn_br[0] + (horn_tip[0] - horn_br[0]) * f) - 1
+        pygame.draw.line(surf, MANE_C[si % 3], (sx_, sy_), (srx, sy_), 2)
 
-    # mane blobs
-    for mi, mc in enumerate(MANE_COLS):
-        mx_ = hcx - 8 + mi * 5
-        my_ = hcy - HR + 6 + mi * 6
-        pygame.draw.circle(surf, OUTLINE, (mx_, my_), 8)
-        pygame.draw.circle(surf, mc,      (mx_, my_), 7)
+    # --- Mane: flowing strands from head down neck ---
+    mane_x = hx - 8
+    mane_y = hy - 12
+    for mi, mc in enumerate(MANE_C):
+        wave = math.sin(anim_t * 3.0 + mi * 1.0) * 5
+        pts = []
+        for s in range(5):
+            f = s / 4
+            px = int(mane_x - mi * 3 - f * 8 + wave * f)
+            py = int(mane_y + f * 24 + mi * 4)
+            pts.append((px, py))
+        for j in range(len(pts) - 1):
+            pygame.draw.line(surf, OL, pts[j], pts[j + 1], 6)
+        for j in range(len(pts) - 1):
+            pygame.draw.line(surf, mc, pts[j], pts[j + 1], 4)
+
+    # --- Eye: big and expressive ---
+    ex, ey = hx + 3, hy - 3
+    if wink:
+        pygame.draw.arc(surf, OL, (ex - 6, ey - 2, 13, 10), 0, math.pi, 3)
+    else:
+        pygame.draw.circle(surf, OL, (ex, ey), 7)
+        pygame.draw.circle(surf, (60, 20, 80), (ex, ey), 6)
+        pygame.draw.circle(surf, OL, (ex + 1, ey + 1), 3)
+        pygame.draw.circle(surf, (255, 255, 255), (ex + 2, ey - 2), 2)
+        pygame.draw.circle(surf, (255, 255, 255), (ex - 1, ey + 1), 1)
+    # Blush
+    bl_s = pygame.Surface((12, 8), pygame.SRCALPHA)
+    pygame.draw.ellipse(bl_s, (*BLUSH, 90), (0, 0, 12, 8))
+    surf.blit(bl_s, (ex + 8, ey + 5))
+
+    # Speech bubble
+    if looking:
+        _draw_speech_bubble(surf, cx + 80, by - 34, "hi mama", 20,
+                            OL, PINK, flip=True)
 
 
-def _draw_menu_scene(surf, t):
+def _draw_robot(surf, anim_t):
+    """Cute sticker-style robot with big head and rosy cheeks."""
+    CYCLE = 8.0
+    t = anim_t % CYCLE
+    OL = COLOR_OUTLINE
+
+    GY = int(HEIGHT * 0.65)
+    STOP_X = int(WIDTH * 0.72)
+
+    if t < 2.5:
+        cx = int(WIDTH + 70 - (WIDTH + 70 - STOP_X) * (t / 2.5))
+        walking, looking = True, False
+    elif t < 4.0:
+        cx, walking, looking = STOP_X, False, True
+    else:
+        cx = int(STOP_X + (WIDTH + 70 - STOP_X) * ((t - 4.0) / (CYCLE - 4.0)))
+        walking, looking = True, False
+
+    if walking:
+        bounce = int(abs(math.sin(anim_t * 8)) * 4)
+    else:
+        bounce = int(math.sin(anim_t * 2.5) * 2)
+
+    BODY_C = (100, 196, 248)
+    DARK_C = (70, 155, 210)
+    GOLD   = (255, 212, 0)
+    RED    = (236, 48, 118)
+    METAL  = (200, 210, 225)
+    LITE   = (170, 225, 255)
+    BLUSH  = (255, 160, 190)
+
+    # Drop shadow
+    sh = pygame.Surface((50, 10), pygame.SRCALPHA)
+    pygame.draw.ellipse(sh, (0, 0, 0, 45), (0, 0, 50, 10))
+    surf.blit(sh, (cx - 25, GY - 3))
+
+    # --- Legs: short chunky with round feet ---
+    for lx_off in (-10, 10):
+        phase = lx_off * 0.3
+        swing = int(math.sin(anim_t * 9 + phase) * 4) if walking else 0
+        lx = cx + lx_off + swing
+        ly_top = GY - 18 - bounce
+        ly_bot = GY - 2
+        # Leg
+        pygame.draw.rect(surf, OL, (lx - 5, ly_top, 10, ly_bot - ly_top), border_radius=3)
+        pygame.draw.rect(surf, METAL, (lx - 4, ly_top + 1, 8, ly_bot - ly_top - 2), border_radius=2)
+        # Round shoe
+        pygame.draw.ellipse(surf, OL, (lx - 7, ly_bot - 4, 14, 8))
+        pygame.draw.ellipse(surf, GOLD, (lx - 6, ly_bot - 3, 12, 6))
+
+    # --- Body: rounded rectangle, compact ---
+    by = GY - 48 - bounce
+    BW, BH = 38, 30
+    body_rect = pygame.Rect(cx - BW // 2, by, BW, BH)
+    pygame.draw.rect(surf, (0, 0, 0), (body_rect.x + 3, body_rect.y + 3,
+                     BW, BH), border_radius=8)
+    pygame.draw.rect(surf, OL, body_rect.inflate(4, 4), border_radius=9)
+    pygame.draw.rect(surf, BODY_C, body_rect, border_radius=8)
+    # Tummy panel
+    panel = pygame.Rect(cx - 10, by + 5, 20, 16)
+    pygame.draw.rect(surf, OL, panel.inflate(2, 2), border_radius=4)
+    pygame.draw.rect(surf, DARK_C, panel, border_radius=4)
+    # Heart on tummy
+    draw_vector_heart(surf, cx, by + 13, 0.35, RED)
+    # Shine
+    shine = pygame.Surface((BW - 10, 7), pygame.SRCALPHA)
+    shine.fill((255, 255, 255, 60))
+    surf.blit(shine, (body_rect.x + 5, body_rect.y + 3))
+
+    # --- Arms: short rounded stubs that wave ---
+    for side in (-1, 1):
+        ax = cx + side * (BW // 2 + 2)
+        ay = by + 8
+        wave_ang = math.sin(anim_t * 3 + side * 2) * 0.4
+        arm_len = 16
+        end_x = ax + int(math.sin(wave_ang) * arm_len) * side
+        end_y = ay + int(math.cos(wave_ang) * arm_len)
+        # Arm
+        pygame.draw.line(surf, OL, (ax, ay), (end_x, end_y), 8)
+        pygame.draw.line(surf, METAL, (ax, ay), (end_x, end_y), 5)
+        # Round mitten hand
+        pygame.draw.circle(surf, OL, (end_x, end_y), 6)
+        pygame.draw.circle(surf, LITE, (end_x, end_y), 4)
+
+    # --- Head: big and rounded (larger than body for cuteness) ---
+    HW, HH = 40, 32
+    hx, hy = cx, by - 8
+    head_rect = pygame.Rect(hx - HW // 2, hy - HH // 2, HW, HH)
+    pygame.draw.rect(surf, (0, 0, 0), (head_rect.x + 2, head_rect.y + 2,
+                     HW, HH), border_radius=10)
+    pygame.draw.rect(surf, OL, head_rect.inflate(4, 4), border_radius=11)
+    pygame.draw.rect(surf, BODY_C, head_rect, border_radius=10)
+    # Shine on forehead
+    sh_s = pygame.Surface((HW - 10, 8), pygame.SRCALPHA)
+    sh_s.fill((255, 255, 255, 60))
+    surf.blit(sh_s, (head_rect.x + 5, head_rect.y + 3))
+
+    # --- Eyes: big round with sparkle highlights ---
+    for ex_off in (-8, 8):
+        ex = hx + ex_off
+        ey = hy - 3 if looking else hy - 1
+        # Eye white
+        pygame.draw.circle(surf, OL, (ex, ey), 7)
+        pygame.draw.circle(surf, (255, 255, 255), (ex, ey), 6)
+        # Iris
+        pygame.draw.circle(surf, OL, (ex, ey + 1), 4)
+        pygame.draw.circle(surf, DARK_C, (ex, ey + 1), 3)
+        # Sparkle
+        pygame.draw.circle(surf, (255, 255, 255), (ex + 2, ey - 2), 2)
+        pygame.draw.circle(surf, (255, 255, 255), (ex - 1, ey + 1), 1)
+
+    # --- Rosy cheeks ---
+    for side in (-1, 1):
+        bl = pygame.Surface((12, 8), pygame.SRCALPHA)
+        pygame.draw.ellipse(bl, (*BLUSH, 100), (0, 0, 12, 8))
+        surf.blit(bl, (hx + side * 12 - 6, hy + 4))
+
+    # --- Mouth: happy smile ---
+    pygame.draw.arc(surf, OL, (hx - 5, hy + 6, 10, 8), -math.pi, 0, 2)
+
+    # --- Antenna: bouncy with heart-shaped ball ---
+    ant_x = hx
+    ant_base = head_rect.top
+    ant_top = ant_base - 14 + int(math.sin(anim_t * 4) * 3)
+    pygame.draw.line(surf, OL, (ant_x, ant_base), (ant_x, ant_top + 4), 3)
+    pygame.draw.line(surf, METAL, (ant_x, ant_base), (ant_x, ant_top + 4), 2)
+    draw_vector_heart(surf, ant_x, ant_top, 0.3, RED)
+
+    # --- Ear bolts (small, round) ---
+    for side in (-1, 1):
+        bx_ = hx + side * (HW // 2 + 2)
+        by_ = hy - 1
+        pygame.draw.circle(surf, OL, (bx_, by_), 4)
+        pygame.draw.circle(surf, GOLD, (bx_, by_), 3)
+
+    # Speech bubble
+    if looking:
+        _draw_speech_bubble(surf, cx - 55, by - 24, "I'm RivBot", 20,
+                            OL, GOLD)
+
+def _draw_rose_head(surf, cx, cy, sz, pc, cc):
+    """Cartoon rose viewed from above. Built from layered scalloped polygons
+    (no rotated sub-surfaces) so the silhouette is one continuous curve and
+    blends with the chunky outlined art style of the menu scene.
+    `pc` = primary petal colour, `cc` = bud centre colour."""
+    pc_dark  = tuple(max(0, int(c * 0.62)) for c in pc)
+    pc_light = tuple(min(255, int(c + (255 - c) * 0.40)) for c in pc)
+
+    def _scalloped(r_base, r_amp, n_bumps, phase, samples=64):
+        """Polygon points for a flower-shaped circle: r = base + amp·cos(n·θ - n·phase)."""
+        out = []
+        for i in range(samples):
+            th = i * (2 * math.pi / samples)
+            r  = r_base + r_amp * math.cos(n_bumps * th - n_bumps * phase)
+            out.append((cx + math.cos(th) * r, cy + math.sin(th) * r))
+        return out
+
+    def _inflate_pts(pts, extra):
+        """Push each point `extra` px farther from (cx,cy) — used for outline."""
+        out = []
+        for (px, py) in pts:
+            dx, dy = px - cx, py - cy
+            d = math.hypot(dx, dy) or 1
+            s = (d + extra) / d
+            out.append((cx + dx * s, cy + dy * s))
+        return out
+
+    # Back layer: large 5-bump scalloped rosette in darker tone, with one
+    # solid outer outline (matches the cartoon style elsewhere)
+    back = _scalloped(sz * 1.55, sz * 0.55, 5, -math.pi / 2)
+    pygame.draw.polygon(surf, COLOR_OUTLINE, _inflate_pts(back, 2.5))
+    pygame.draw.polygon(surf, pc_dark, back)
+
+    # Middle layer: smaller rosette in primary colour, offset by half-bump
+    # so its petals sit between the back petals
+    mid = _scalloped(sz * 1.05, sz * 0.32, 5, -math.pi / 2 + math.pi / 5)
+    pygame.draw.polygon(surf, pc, mid)
+
+    # Inner highlight layer: smaller still, lighter tone
+    inner = _scalloped(sz * 0.62, sz * 0.18, 5, -math.pi / 2)
+    pygame.draw.polygon(surf, pc_light, inner)
+
+    # Subtle dark divisions between back petals to suggest folded petals
+    for i in range(5):
+        valley = -math.pi / 2 + (i + 0.5) * (2 * math.pi / 5)
+        x1 = cx + math.cos(valley) * (sz * 0.55)
+        y1 = cy + math.sin(valley) * (sz * 0.55)
+        x2 = cx + math.cos(valley) * (sz * 1.20)
+        y2 = cy + math.sin(valley) * (sz * 1.20)
+        pygame.draw.line(surf, pc_dark, (int(x1), int(y1)), (int(x2), int(y2)), 1)
+
+    # Spiral bud centre
+    bud_r = max(3, int(sz * 0.42))
+    pygame.draw.circle(surf, COLOR_OUTLINE, (cx, cy), bud_r + 2)
+    pygame.draw.circle(surf, cc, (cx, cy), bud_r + 1)
+    fold = max(1, sz // 5)
+    pygame.draw.circle(surf, pc, (cx + fold, cy - fold), max(2, bud_r - 1))
+    pygame.draw.circle(surf, pc_light, (cx - fold // 2, cy + fold // 2), max(1, bud_r - 2))
+
+
+def _draw_menu_scene(surf, t, menu_elapsed=999):
     """Mother's Day illustration: sun, unicorn, big flowers, floating hearts."""
     # ── Sun top-right ────────────────────────────────────────────────────────
     sun_x, sun_y, sun_r = int(WIDTH * 0.82), 72, 36
@@ -1085,31 +1631,114 @@ def _draw_menu_scene(surf, t):
     pygame.draw.circle(surf, COLOR_YELLOW,  (sun_x, sun_y), sun_r)
     pygame.draw.circle(surf, (255, 245, 150), (sun_x - 10, sun_y - 10), sun_r // 3)
 
-    # ── Unicorn ───────────────────────────────────────────────────────────────
-    _draw_unicorn(surf, t)
-
-    # ── Big foreground flowers ────────────────────────────────────────────────
-    h3y = int(HEIGHT * 0.72)
+    # ── Big roses (drawn first so they appear behind characters) ────────────
+    #   Two-phase grow: stem rises out of the ground, then bloom unfolds.
+    #   Each rose is staggered randomly AFTER the "HAPPY MAMA DAY" lockup
+    #   finishes (~3.2s).
+    h3y = int(HEIGHT * 0.52)
     flowers = [
-        (int(WIDTH * 0.10), h3y - 28, 11, [(255,120,170),(255,240,0)]),
-        (int(WIDTH * 0.28), h3y - 50, 13, [(255,255,255),(255,210,0)]),
-        (int(WIDTH * 0.50), h3y - 36, 10, [(255,190,80), (255,130,0)]),
-        (int(WIDTH * 0.72), h3y - 52, 14, [(255,120,170),(255,240,0)]),
-        (int(WIDTH * 0.90), h3y - 26, 10, [(255,255,255),(255,210,0)]),
+        (int(WIDTH * 0.10), h3y - 28, 12, [(220,  40,  80), (130,  14,  40)]),  # Red rose
+        (int(WIDTH * 0.28), h3y - 50, 14, [(255, 140, 180), (236,  48, 118)]),  # Pink rose
+        (int(WIDTH * 0.50), h3y - 36, 11, [(255, 240, 230), (240, 180, 160)]),  # Cream rose
+        (int(WIDTH * 0.72), h3y - 52, 15, [(255, 200,  90), (240, 130,  30)]),  # Yellow rose
+        (int(WIDTH * 0.90), h3y - 26, 11, [(200, 160, 255), (140,  90, 200)]),  # Lavender rose
     ]
+
+    FLOWER_START  = 3.2   # matches LOCKUP_DUR (STAR_START + STAR_DUR)
+    FLOWER_WINDOW = 1.4   # total random stagger window
+    STEM_GROW     = 0.45  # phase 1: stem rises from ground
+    BLOOM_GROW    = 0.50  # phase 2: bloom unfolds at the tip
+
     for fx, fy, fsz, (pc, cc) in flowers:
-        pygame.draw.line(surf, COLOR_GRASS_DARK, (fx, fy), (fx, fy + fsz * 3),
-                         max(2, fsz // 4))
-        for ang in range(0, 360, 45):
-            rad = math.radians(ang)
-            pygame.draw.circle(surf, COLOR_OUTLINE,
-                               (int(fx + math.cos(rad) * (fsz+2)),
-                                int(fy + math.sin(rad) * (fsz+2))), fsz+1)
-            pygame.draw.circle(surf, pc,
-                               (int(fx + math.cos(rad) * (fsz+1)),
-                                int(fy + math.sin(rad) * (fsz+1))), fsz)
-        pygame.draw.circle(surf, COLOR_OUTLINE, (fx, fy), fsz // 2 + 2)
-        pygame.draw.circle(surf, cc,            (fx, fy), fsz // 2)
+        seed        = fx * 1000 + fy
+        spawn_delay = random.Random(seed ^ 0x5EED).uniform(0, FLOWER_WINDOW)
+        grow_t      = menu_elapsed - FLOWER_START - spawn_delay
+        if grow_t <= 0:
+            continue
+
+        stem_len = fsz * 6
+        stem_w   = max(2, fsz // 4)
+        ground_y = fy + stem_len  # base of stem (where it meets the hill)
+
+        # ── Phase 1: stem grows upward from the ground ──
+        stem_p   = min(1.0, grow_t / STEM_GROW)
+        cur_len  = int(stem_len * _ease_out_cubic(stem_p))
+        if cur_len < 1:
+            continue
+
+        rng = random.Random(seed)
+        # Build full stem+leaves to a local surface, then blit only the bottom
+        # `cur_len` portion so leaves emerge naturally as the stem rises.
+        side_pad = fsz + 6
+        S_W = side_pad * 2
+        S_H = stem_len + 2
+        ssurf = pygame.Surface((S_W, S_H), pygame.SRCALPHA)
+        sx = side_pad
+
+        pygame.draw.line(ssurf, COLOR_GRASS_DARK, (sx, 0), (sx, S_H - 1), stem_w)
+
+        num_leaves = rng.randint(2, 4)
+        positions  = sorted([rng.uniform(0.2, 0.8) for _ in range(num_leaves)])
+        first_side = rng.choice((-1, 1))
+        for li, lf in enumerate(positions):
+            ly = int(S_H * lf)
+            side   = first_side if li % 2 == 0 else -first_side
+            leaf_w = rng.randint(fsz, fsz + 5)
+            leaf_h = rng.randint(fsz // 2 + 1, fsz // 2 + 5)
+            leaf_pts = [
+                (sx, ly),
+                (sx + side * leaf_w, ly - leaf_h // 2),
+                (sx + side * leaf_w * 3 // 4, ly + leaf_h // 2),
+            ]
+            pygame.draw.polygon(ssurf, COLOR_GRASS_DARK, leaf_pts)
+            inner_pts = [
+                (sx + side * 1, ly),
+                (sx + side * (leaf_w - 1), ly - leaf_h // 2 + 1),
+                (sx + side * (leaf_w * 3 // 4 - 1), ly + leaf_h // 2 - 1),
+            ]
+            pygame.draw.polygon(ssurf, COLOR_GRASS, inner_pts)
+
+        src_rect = pygame.Rect(0, S_H - cur_len, S_W, cur_len)
+        surf.blit(ssurf, (fx - side_pad, ground_y - cur_len), src_rect)
+
+        # ── Phase 2: bloom unfolds at the tip of the fully-grown stem ──
+        if grow_t < STEM_GROW:
+            continue
+
+        bloom_t = grow_t - STEM_GROW
+        bloom_p = min(1.0, bloom_t / BLOOM_GROW)
+        scale   = max(0.0, _ease_out_back(bloom_p))
+        if scale <= 0.01:
+            continue
+
+        # Render rose head onto a local surface centred at (B/2, B/2).
+        # The rose silhouette extends out to ~sz*2.1 + outline; size B with
+        # generous margin so the silhouette is never clipped to a rectangle.
+        B = int(fsz * 2.4) * 2 + 12
+        bsurf = pygame.Surface((B, B), pygame.SRCALPHA)
+        _draw_rose_head(bsurf, B // 2, B // 2, fsz, pc, cc)
+
+        sw = max(1, int(B * scale))
+        sh = max(1, int(B * scale))
+        scaled = pygame.transform.smoothscale(bsurf, (sw, sh))
+
+        # Post-bloom wobble: gentle rotation damping out in ~0.8s
+        if bloom_p >= 1.0:
+            wob_t = bloom_t - BLOOM_GROW
+            if wob_t < 0.8:
+                damp  = 1.0 - (wob_t / 0.8)
+                angle = math.sin(wob_t * 11.0) * 6.0 * damp
+                scaled = pygame.transform.rotate(scaled, angle)
+
+        rect = scaled.get_rect(center=(fx, fy))
+        surf.blit(scaled, rect)
+
+    # ── Characters enter after title finishes animating (~3.2s) ─────────────
+    CHAR_DELAY = 3.5
+    if menu_elapsed > CHAR_DELAY:
+        char_t = menu_elapsed - CHAR_DELAY
+        _draw_unicorn(surf, char_t)
+        _draw_robot(surf, char_t + 4.0)
 
     # ── Floating hearts rising through the sky ────────────────────────────────
     heart_cols = [COLOR_BLUSH, COLOR_YELLOW, COLOR_CREAM, (255,160,200), COLOR_BLUSH]
@@ -1117,7 +1746,7 @@ def _draw_menu_scene(surf, t):
         seed  = i * 1.7
         hx    = int(WIDTH * (0.12 + i * 0.19))
         cycle = (t * 0.38 + seed) % 1.0
-        hy    = int(HEIGHT * 0.58 - cycle * HEIGHT * 0.48)
+        hy    = int(HEIGHT * 0.50 - cycle * HEIGHT * 0.40)
         alpha = int(210 * math.sin(cycle * math.pi))
         size  = 0.8 + 0.4 * math.sin(seed)
         draw_vector_heart(surf, hx, hy, size, heart_cols[i], alpha)
@@ -1144,7 +1773,7 @@ def draw_menu(screen, dt, selected_idx, completed_games):
     menu_elapsed = t - _menu_enter_time
 
     # Full-screen Mother's Day illustration
-    _draw_menu_scene(screen, t)
+    _draw_menu_scene(screen, t, menu_elapsed)
 
     # ── Title lockup: "HAPPY MAMA DAY" ──────────────────────────────────────
     #   Single centered unit that animates in together, then holds
@@ -1152,110 +1781,497 @@ def draw_menu(screen, dt, selected_idx, completed_games):
     lockup_cy = int(HEIGHT * 0.26)
     cx        = WIDTH // 2
 
-    # Row heights — Happy/Day are scaled down from the hero font
+    # Row heights — Happy is scaled down, Day is full size like MAMA
     r_mama  = _fhuge.get_height()
     r_happy = int(r_mama * 0.36)
-    r_day   = int(r_mama * 0.34)
+    r_day   = r_mama
     gap     = -2
     total_h = r_happy + gap + r_mama + gap + r_day
 
-    # ── Animation: lockup scales up 0→1 with bounce over 0.6s ────────────────
-    LOCKUP_DUR = 0.6
-    lockup_p = min(1.0, menu_elapsed / LOCKUP_DUR)
-    lockup_scale = _ease_out_back(lockup_p)
-    lockup_alpha = min(255, int(lockup_p * 2.5 * 255))  # fade in faster than scale
+    # ── Dramatic staggered reveal ───────────────────────────────────────────
+    #   Phase 1: "Happy" floats down          0.4s – 1.1s
+    #   Phase 2: "MAMA" letters bounce in     1.0s – 2.2s  (each letter staggered)
+    #   Phase 3: "Day ♥" fades up             2.0s – 2.6s
+    #   Phase 4: Stars sparkle in             2.4s – 2.8s
+    #   Phase 5: Buttons rise                 2.8s+
 
-    # Build the entire lockup onto one surface, then scale + blit it
-    lockup_w = WIDTH
-    lockup_h = total_h + 30  # padding for outlines and bob
-    lockup_surf = pygame.Surface((lockup_w, lockup_h), pygame.SRCALPHA)
-    lcx = lockup_w // 2
-    # Vertical offsets within the lockup surface
-    ly_happy = 10
-    ly_mama  = ly_happy + r_happy + gap
-    ly_day   = ly_mama  + r_mama  + gap
+    HAPPY_START, HAPPY_DUR   = 0.4, 0.7
+    MAMA_START,  MAMA_DUR    = 1.0, 0.5
+    MAMA_STAGGER_DELAY       = 0.25
+    DAY_START,   DAY_DUR     = 2.0, 0.6
+    STAR_START,  STAR_DUR    = 2.8, 0.4
 
-    # "Happy" — centered, scaled to 40%
-    happy_fs = _fhuge.render("Happy", True, COLOR_CREAM)
-    happy_os = _fhuge.render("Happy", True, COLOR_OUTLINE)
-    hsw = max(1, int(happy_fs.get_width() * 0.40))
-    hsh = max(1, int(happy_fs.get_height() * 0.40))
-    happy_fs = pygame.transform.smoothscale(happy_fs, (hsw, hsh))
-    happy_os = pygame.transform.smoothscale(happy_os, (hsw, hsh))
+    # Compute screen-space positions for each row
+    lockup_top = lockup_cy - total_h // 2
+    y_happy = lockup_top
+    y_mama  = y_happy + r_happy + gap
+    y_day   = y_mama  + r_mama  + gap
     ow = 3
-    for ddx in (-ow, 0, ow):
-        for ddy in (-ow, 0, ow):
-            if ddx or ddy:
-                lockup_surf.blit(happy_os, (lcx - hsw//2 + ddx, ly_happy + r_happy//2 - hsh//2 + ddy))
-    lockup_surf.blit(happy_fs, (lcx - hsw//2, ly_happy + r_happy//2 - hsh//2))
 
-    # "MAMA" — individual letters, alternating pink/gold, gentle bob once settled
+    # ── "Happy" — floats down from above with fade ────────────────────────────
+    happy_elapsed = menu_elapsed - HAPPY_START
+    happy_p = max(0.0, min(1.0, happy_elapsed / HAPPY_DUR))
+    if happy_p > 0:
+        happy_scale = _ease_out_back(happy_p)
+        happy_alpha = min(255, int(happy_p * 2.0 * 255))
+        happy_slide = int((1 - _ease_out_cubic(happy_p)) * -50)
+
+        happy_fs = _fhuge.render("Happy", True, COLOR_CREAM)
+        happy_os = _fhuge.render("Happy", True, COLOR_OUTLINE)
+        hsw = max(1, int(happy_fs.get_width() * 0.40 * happy_scale))
+        hsh = max(1, int(happy_fs.get_height() * 0.40 * happy_scale))
+        happy_fs = pygame.transform.smoothscale(happy_fs, (hsw, hsh))
+        happy_os = pygame.transform.smoothscale(happy_os, (hsw, hsh))
+        hx = cx - hsw // 2
+        hy = y_happy + r_happy // 2 - hsh // 2 + happy_slide
+        tmp = pygame.Surface((hsw + ow*2, hsh + ow*2), pygame.SRCALPHA)
+        for ddx in (-ow, 0, ow):
+            for ddy in (-ow, 0, ow):
+                if ddx or ddy:
+                    tmp.blit(happy_os, (ow + ddx, ow + ddy))
+        tmp.blit(happy_fs, (ow, ow))
+        tmp.set_alpha(happy_alpha)
+        screen.blit(tmp, (hx - ow, hy - ow))
+
+    # ── "MAMA" — each letter bounces in individually ──────────────────────────
     letters      = "MAMA"
     alt_cols     = [COLOR_BLUSH, COLOR_YELLOW, COLOR_BLUSH, COLOR_YELLOW]
     letter_surfs = [_fhuge.render(l, True, c) for l, c in zip(letters, alt_cols)]
     out_surfs    = [_fhuge.render(l, True, COLOR_OUTLINE) for l in letters]
     total_lw     = sum(s.get_width() for s in letter_surfs) + 2 * (len(letters) - 1)
-    lx           = lcx - total_lw // 2
+    lx           = cx - total_lw // 2
     mow          = 4
+    all_mama_done = True
     for idx, (ls, os_) in enumerate(zip(letter_surfs, out_surfs)):
-        bob = int(math.sin(t * 2.8 + idx * 1.1) * 7) if lockup_p >= 1.0 else 0
-        ly  = ly_mama + bob
+        letter_elapsed = menu_elapsed - MAMA_START - idx * MAMA_STAGGER_DELAY
+        letter_p = max(0.0, min(1.0, letter_elapsed / MAMA_DUR))
+        if letter_p < 1.0:
+            all_mama_done = False
+        if letter_p <= 0:
+            lx += ls.get_width() + 2
+            continue
+
+        letter_scale = _ease_out_back(letter_p)
+        letter_alpha = min(255, int(letter_p * 2.5 * 255))
+        bob = int(math.sin(t * 2.8 + idx * 1.1) * 7) if letter_p >= 1.0 else 0
+        drop = int((1 - _ease_out_cubic(letter_p)) * -80)
+
+        sw = max(1, int(ls.get_width() * letter_scale))
+        sh = max(1, int(ls.get_height() * letter_scale))
+        ls_s = pygame.transform.smoothscale(ls, (sw, sh))
+        os_s = pygame.transform.smoothscale(os_, (sw, sh))
+        draw_x = lx + ls.get_width() // 2 - sw // 2
+        draw_y = y_mama + bob + drop + ls.get_height() // 2 - sh // 2
+        tmp = pygame.Surface((sw + mow*2, sh + mow*2), pygame.SRCALPHA)
         for ddx in (-mow, 0, mow):
             for ddy in (-mow, 0, mow):
                 if ddx or ddy:
-                    lockup_surf.blit(os_, (lx + ddx, ly + ddy))
-        lockup_surf.blit(ls, (lx, ly))
+                    tmp.blit(os_s, (mow + ddx, mow + ddy))
+        tmp.blit(ls_s, (mow, mow))
+        tmp.set_alpha(letter_alpha)
+        screen.blit(tmp, (draw_x - mow, draw_y - mow))
         lx += ls.get_width() + 2
 
-    # "Day ♥" — centered, scaled to 38%
-    day_fs = _fhuge.render("Day  \u2665", True, COLOR_YELLOW)
-    day_os = _fhuge.render("Day  \u2665", True, COLOR_OUTLINE)
-    dsw = max(1, int(day_fs.get_width() * 0.38))
-    dsh = max(1, int(day_fs.get_height() * 0.38))
-    day_fs = pygame.transform.smoothscale(day_fs, (dsw, dsh))
-    day_os = pygame.transform.smoothscale(day_os, (dsw, dsh))
-    for ddx in (-ow, 0, ow):
-        for ddy in (-ow, 0, ow):
-            if ddx or ddy:
-                lockup_surf.blit(day_os, (lcx - dsw//2 + ddx, ly_day + r_day//2 - dsh//2 + ddy))
-    lockup_surf.blit(day_fs, (lcx - dsw//2, ly_day + r_day//2 - dsh//2))
+    # ── "DAY" — full-size letters with individual bounce, like MAMA ─────────
+    day_letters  = "DAY"
+    day_cols     = [COLOR_YELLOW, COLOR_BLUSH, COLOR_YELLOW]
+    day_surfs    = [_fhuge.render(l, True, c) for l, c in zip(day_letters, day_cols)]
+    day_out      = [_fhuge.render(l, True, COLOR_OUTLINE) for l in day_letters]
+    total_dw     = sum(s.get_width() for s in day_surfs) + 2 * (len(day_letters) - 1)
+    dlx          = cx - total_dw // 2
+    for idx, (ds, do_) in enumerate(zip(day_surfs, day_out)):
+        dl_elapsed = menu_elapsed - DAY_START - idx * MAMA_STAGGER_DELAY
+        dl_p = max(0.0, min(1.0, dl_elapsed / DAY_DUR))
+        if dl_p <= 0:
+            dlx += ds.get_width() + 2
+            continue
 
-    # Stars flanking the lockup
-    mama_half_w = total_lw // 2 + 20
-    for i, (sx, sy, sr) in enumerate([
-        (lcx - mama_half_w, ly_happy + r_happy // 2, 7),
-        (lcx + mama_half_w, ly_happy + r_happy // 2, 7),
-        (lcx - mama_half_w + 14, ly_day + r_day // 2, 5),
-        (lcx + mama_half_w - 14, ly_day + r_day // 2, 5),
-    ]):
-        pulse = 1.0 + 0.3 * math.sin(t * 2.5 + i * 1.4)
-        _draw_star(lockup_surf, sx, sy, int(sr * pulse), COLOR_YELLOW)
+        dl_scale = _ease_out_back(dl_p)
+        dl_alpha = min(255, int(dl_p * 2.5 * 255))
+        bob = int(math.sin(t * 2.8 + idx * 1.1 + 2.0) * 7) if dl_p >= 1.0 else 0
+        drop = int((1 - _ease_out_cubic(dl_p)) * 40)
 
-    # Scale and blit the lockup as one unit
-    if lockup_scale > 0.01:
-        sw = max(1, int(lockup_w * lockup_scale))
-        sh = max(1, int(lockup_h * lockup_scale))
-        scaled = pygame.transform.smoothscale(lockup_surf, (sw, sh))
-        scaled.set_alpha(lockup_alpha)
-        dest_y = lockup_cy - total_h // 2 - 10  # align with original y_happy
-        screen.blit(scaled, (cx - sw // 2, dest_y + lockup_h // 2 - sh // 2))
+        dsw = max(1, int(ds.get_width() * dl_scale))
+        dsh = max(1, int(ds.get_height() * dl_scale))
+        ds_s = pygame.transform.smoothscale(ds, (dsw, dsh))
+        do_s = pygame.transform.smoothscale(do_, (dsw, dsh))
+        draw_x = dlx + ds.get_width() // 2 - dsw // 2
+        draw_y = y_day + bob + drop + ds.get_height() // 2 - dsh // 2
+        tmp = pygame.Surface((dsw + mow*2, dsh + mow*2), pygame.SRCALPHA)
+        for ddx in (-mow, 0, mow):
+            for ddy in (-mow, 0, mow):
+                if ddx or ddy:
+                    tmp.blit(do_s, (mow + ddx, mow + ddy))
+        tmp.blit(ds_s, (mow, mow))
+        tmp.set_alpha(dl_alpha)
+        screen.blit(tmp, (draw_x - mow, draw_y - mow))
+        dlx += ds.get_width() + 2
 
-    # ── Buttons — bubble up after lockup resolves ─────────────────────────────
-    BTN_DELAY  = LOCKUP_DUR + 0.1   # buttons start after lockup finishes
-    BTN_DUR    = 0.35
-    BTN_STAGGER = 0.08
+    # ── Stars flanking the lockup — sparkle in ────────────────────────────────
+    star_elapsed = menu_elapsed - STAR_START
+    star_p = max(0.0, min(1.0, star_elapsed / STAR_DUR))
+    if star_p > 0:
+        mama_half_w = total_lw // 2 + 20
+        day_half_w  = total_dw // 2 + 20
+        star_alpha = min(255, int(star_p * 255))
+        star_scale_anim = _ease_out_back(star_p)
+        for i, (sx, sy, sr) in enumerate([
+            (cx - mama_half_w, y_happy + r_happy // 2, 7),
+            (cx + mama_half_w, y_happy + r_happy // 2, 7),
+            (cx - day_half_w + 14, y_day + r_day // 2, 5),
+            (cx + day_half_w - 14, y_day + r_day // 2, 5),
+        ]):
+            pulse = 1.0 + 0.3 * math.sin(t * 2.5 + i * 1.4)
+            _draw_star(screen, sx, sy, int(sr * pulse * star_scale_anim), COLOR_YELLOW)
+
+    # ── Buttons — bubble up after full reveal ─────────────────────────────────
+    LOCKUP_DUR = STAR_START + STAR_DUR  # total reveal time
+    BTN_DELAY  = LOCKUP_DUR + 0.15
+    BTN_DUR    = 0.45
+    BTN_STAGGER = 0.15
     BTN_COLORS = [(100, 196, 248), COLOR_BLUSH, (255, 185, 0)]
     for i, (opt, rect) in enumerate(zip(options, _menu_button_rects())):
         btn_elapsed = menu_elapsed - BTN_DELAY - i * BTN_STAGGER
         btn_p = max(0.0, min(1.0, btn_elapsed / BTN_DUR))
         if btn_p <= 0:
             continue
-        slide_offset = int((1 - _ease_out_cubic(btn_p)) * 60)
+        slide_offset = int((1 - _ease_out_back(btn_p)) * 80)
+        btn_alpha = min(255, int(btn_p * 2.5 * 255))
         anim_rect = pygame.Rect(rect.x, rect.y + slide_offset, rect.width, rect.height)
         col  = COLOR_BLUSH if i == selected_idx else BTN_COLORS[i % 3]
-        draw_crafted_button(screen, anim_rect, opt["text"], font_ui, col)
+        btn_surf = pygame.Surface((rect.width + 8, rect.height + 8), pygame.SRCALPHA)
+        btn_sub_rect = pygame.Rect(4, 4, rect.width, rect.height)
+        draw_crafted_button(btn_surf, btn_sub_rect, opt["text"], font_ui, col)
+        btn_surf.set_alpha(btn_alpha)
+        screen.blit(btn_surf, (anim_rect.x - 4, anim_rect.y - 4))
         if i in completed_games:
             draw_vector_heart(screen, anim_rect.right - 28, anim_rect.centery, 1.0, COLOR_YELLOW)
+
+def init_sliding_puzzle():
+    """4×4 sliding-tile puzzle. Solved = tiles 1-15 in order with the blank at position 15."""
+    global puzzle_tiles, puzzle_tile_images, puzzle_anim, hint_popup_start, hint_click_count
+    global puzzle_full_image, puzzle_preview_start, puzzle_move_count, hint_button_reveal_time
+    global PUZZLE_TILE_PX, PUZZLE_BOARD_PX, PUZZLE_BOARD_X, PUZZLE_BOARD_Y
+    hint_popup_start = None
+    hint_click_count = 0
+    puzzle_full_image = None
+    puzzle_preview_start = None
+    puzzle_move_count = 0
+    hint_button_reveal_time = None
+
+    PUZZLE_TILE_PX = (WIDTH - 24) // 4
+    PUZZLE_BOARD_PX = PUZZLE_TILE_PX * 4
+    PUZZLE_BOARD_X = (WIDTH - PUZZLE_BOARD_PX) // 2
+    avail_h = HEIGHT - GAME_TOP - GAME_BOTTOM
+    PUZZLE_BOARD_Y = GAME_TOP + (avail_h - PUZZLE_BOARD_PX) // 2
+
+    # Tile art — fixed closeup of the twins, with fallbacks
+    img_dir = os.path.dirname(os.path.abspath(__file__))
+    kids_dir = os.path.join(img_dir, "kids")
+    src_path = None
+    for preferred_path in (
+        os.path.join(kids_dir, "ducks2.jpeg"),
+        os.path.join(kids_dir, "ducks2.jpg"),
+        os.path.join(kids_dir, "ducks2.JPG"),
+        os.path.join(kids_dir, "ducks2.png"),
+    ):
+        if os.path.exists(preferred_path):
+            src_path = preferred_path
+            break
+    if src_path is None and os.path.isdir(kids_dir):
+        try:
+            photos = [f for f in os.listdir(kids_dir)
+                      if f.lower().endswith((".png", ".jpg", ".jpeg"))]
+            if photos:
+                src_path = os.path.join(kids_dir, random.choice(photos))
+        except Exception:
+            pass
+    if src_path is None:
+        for fallback in ("img1.jpg.jpeg", "img1.jpeg", "img1.jpg", "img1.png"):
+            p = os.path.join(img_dir, fallback)
+            if os.path.exists(p):
+                src_path = p
+                break
+
+    puzzle_tile_images = []
+    if src_path:
+        try:
+            full = pygame.image.load(src_path).convert_alpha()
+            # Crop to square around the kids (focal point) so their faces fill the board
+            w, h = full.get_size()
+            zoom = 2.5
+            focal_x_frac = 0.50
+            focal_y_frac = 0.58
+            side = max(1, int(min(w, h) / zoom))
+            fx = int(w * focal_x_frac)
+            fy = int(h * focal_y_frac)
+            x0 = max(0, min(w - side, fx - side // 2))
+            y0 = max(0, min(h - side, fy - side // 2))
+            square = pygame.Surface((side, side), pygame.SRCALPHA)
+            square.blit(full, (0, 0), pygame.Rect(x0, y0, side, side))
+            full = pygame.transform.smoothscale(square, (PUZZLE_BOARD_PX, PUZZLE_BOARD_PX))
+            puzzle_full_image = full.copy()
+            puzzle_preview_start = time.time()
+            for i in range(16):
+                r, c = divmod(i, 4)
+                slice_surf = pygame.Surface((PUZZLE_TILE_PX, PUZZLE_TILE_PX), pygame.SRCALPHA)
+                slice_surf.blit(full, (0, 0),
+                                pygame.Rect(c * PUZZLE_TILE_PX, r * PUZZLE_TILE_PX,
+                                            PUZZLE_TILE_PX, PUZZLE_TILE_PX))
+                puzzle_tile_images.append(slice_surf)
+        except Exception:
+            puzzle_tile_images = []
+
+    # Shuffle via random valid moves from the solved state — guarantees solvability
+    tiles = list(range(1, 16)) + [0]
+    blank = 15
+    last_blank = -1
+    for _ in range(200):
+        r, c = divmod(blank, 4)
+        neighbours = []
+        if r > 0: neighbours.append(blank - 4)
+        if r < 3: neighbours.append(blank + 4)
+        if c > 0: neighbours.append(blank - 1)
+        if c < 3: neighbours.append(blank + 1)
+        neighbours = [n for n in neighbours if n != last_blank] or neighbours
+        pick = random.choice(neighbours)
+        tiles[blank], tiles[pick] = tiles[pick], tiles[blank]
+        last_blank, blank = blank, pick
+
+    puzzle_tiles = tiles
+    puzzle_anim = {}
+
+
+def _puzzle_tile_rect(index):
+    r, c = divmod(index, 4)
+    return pygame.Rect(PUZZLE_BOARD_X + c * PUZZLE_TILE_PX,
+                       PUZZLE_BOARD_Y + r * PUZZLE_TILE_PX,
+                       PUZZLE_TILE_PX, PUZZLE_TILE_PX)
+
+
+def _puzzle_try_move(clicked_index):
+    """Swap with blank if orthogonally adjacent. Returns True on a move."""
+    if puzzle_tiles[clicked_index] == 0:
+        return False
+    blank = puzzle_tiles.index(0)
+    r1, c1 = divmod(clicked_index, 4)
+    r2, c2 = divmod(blank, 4)
+    if abs(r1 - r2) + abs(c1 - c2) != 1:
+        return False
+    tile_num = puzzle_tiles[clicked_index]
+    puzzle_anim[tile_num] = [(c1 - c2) * PUZZLE_TILE_PX, (r1 - r2) * PUZZLE_TILE_PX]
+    puzzle_tiles[blank], puzzle_tiles[clicked_index] = (
+        puzzle_tiles[clicked_index], puzzle_tiles[blank])
+    return True
+
+
+def _puzzle_solved():
+    return puzzle_tiles == list(range(1, 16)) + [0]
+
+
+HINT_POPUP_DUR = 0.32
+HINT_CARD_W = 360
+HINT_CARD_H = 150
+
+PUZZLE_PREVIEW_HOLD = 1.5
+PUZZLE_PREVIEW_DISSOLVE = 0.5
+PUZZLE_PREVIEW_TOTAL = PUZZLE_PREVIEW_HOLD + PUZZLE_PREVIEW_DISSOLVE
+
+HINT_BUTTON_REVEAL_MOVES = 6
+HINT_BUTTON_REVEAL_DUR = 0.45
+HINT_BUTTON_W = 260
+HINT_BUTTON_H = 68
+
+
+def _hint_button_rect():
+    r = pygame.Rect(0, 0, HINT_BUTTON_W, HINT_BUTTON_H)
+    r.center = (WIDTH // 2, (PUZZLE_BOARD_Y + PUZZLE_BOARD_PX + HEIGHT) // 2)
+    return r
+
+
+def _hint_button_visible():
+    return puzzle_move_count >= HINT_BUTTON_REVEAL_MOVES
+
+
+def _puzzle_preview_active():
+    return (puzzle_preview_start is not None
+            and time.time() - puzzle_preview_start < PUZZLE_PREVIEW_TOTAL)
+
+HINT_MESSAGES = [
+    ("Just kidding!",      "Figure it out"),
+    ("Still no help.",     "You got this"),
+    ("Nope.",              "Back to work"),
+    ("Try harder.",        "Keep trying"),
+    ("Are you serious?",   "Stop clicking"),
+    ("This is sad now.",   "Help yourself"),
+    ("Bless your heart.",  "Good luck"),
+    ("I admire you.",      "Still no"),
+]
+
+
+def _hint_card_rect():
+    r = pygame.Rect(0, 0, HINT_CARD_W, HINT_CARD_H)
+    r.center = (WIDTH // 2, HEIGHT - GAME_BOTTOM - 10 - HINT_CARD_H // 2)
+    return r
+
+
+def _hint_dismiss_rect():
+    r = pygame.Rect(0, 0, 210, 46)
+    card = _hint_card_rect()
+    r.center = (card.centerx, card.bottom - 38)
+    return r
+
+
+def _hint_current_texts():
+    idx = max(0, min(hint_click_count - 1, len(HINT_MESSAGES) - 1))
+    return HINT_MESSAGES[idx]
+
+
+def _draw_hint_popup(screen):
+    """Escalating 'Just kidding' pop-up — gets sassier each click."""
+    t = max(0.0, time.time() - hint_popup_start)
+    if t < HINT_POPUP_DUR:
+        p = t / HINT_POPUP_DUR
+        s = 1.70158
+        scale = 1 + ((p - 1) ** 3) * (s + 1) + ((p - 1) ** 2) * s
+    else:
+        scale = 1.0
+    scale = max(0.05, scale)
+
+    base = _hint_card_rect()
+    card_w = max(1, int(base.width * scale))
+    card_h = max(1, int(base.height * scale))
+    card_rect = pygame.Rect(0, 0, card_w, card_h)
+    card_rect.center = base.center
+
+    pygame.draw.rect(screen, (0, 0, 0), card_rect.move(4, 6), border_radius=18)
+    pygame.draw.rect(screen, COLOR_CREAM, card_rect, border_radius=18)
+    pygame.draw.rect(screen, COLOR_OUTLINE, card_rect, 4, border_radius=18)
+
+    title_text, button_text = _hint_current_texts()
+
+    if scale > 0.55:
+        alpha = int(min(1.0, (scale - 0.55) / 0.45) * 255)
+        # Shrink font if title is too wide for the card
+        title_font = font_title
+        title = title_font.render(title_text, True, COLOR_OUTLINE)
+        if title.get_width() > card_rect.width - 30:
+            title_font = font_win
+            title = title_font.render(title_text, True, COLOR_OUTLINE)
+        title.set_alpha(alpha)
+        screen.blit(title, title.get_rect(center=(card_rect.centerx, card_rect.top + 40)))
+
+    if scale >= 0.99:
+        draw_crafted_button(screen, _hint_dismiss_rect(), button_text, font_ui, COLOR_BLUSH)
+
+
+def draw_playing_puzzle(screen, dt, limit, elapsed_time):
+    crafted_bg.draw(screen, dt)
+
+    elapsed_time = max(0.0, elapsed_time)
+    if limit:
+        remaining = max(0, limit - elapsed_time)
+        bar_w = int((remaining / limit) * (WIDTH - 40))
+        pygame.draw.rect(screen, COLOR_OUTLINE, (20, 18, WIDTH-40, 16), border_radius=8)
+        pygame.draw.rect(screen, (200, 220, 255), (22, 20, WIDTH-44, 12), border_radius=6)
+        pygame.draw.rect(screen, COLOR_OUTLINE, (20, 18, WIDTH-40, 16), 3, border_radius=8)
+        if bar_w > 0:
+            if remaining < 10:
+                pulse = abs(math.sin(time.time() * 4)) * 0.3
+                bar_color = (255, int(80 + pulse * 100), 60)
+            elif remaining < 30:
+                bar_color = (255, 200, 0)
+            else:
+                bar_color = COLOR_YELLOW
+            pygame.draw.rect(screen, bar_color, (22, 20, max(0, bar_w-4), 12), border_radius=6)
+
+    # Header banner
+    header_lines = wrap_text("Faces that only a Mama knows", font_win, WIDTH - 60)
+    th = font_win.get_height()
+    banner_h = th * len(header_lines) + 22
+    banner_y = 55
+    _draw_banner(screen, pygame.Rect(10, banner_y, WIDTH - 20, banner_h))
+    _draw_star(screen, 24,          banner_y + banner_h // 2, 7, COLOR_YELLOW)
+    _draw_star(screen, WIDTH - 24,  banner_y + banner_h // 2, 7, COLOR_YELLOW)
+    ty = banner_y + 11
+    for line in header_lines:
+        draw_soft_text(screen, line, font_win, COLOR_CREAM, (WIDTH // 2, ty + th // 2))
+        ty += th
+
+    # Board backdrop with drop shadow
+    board_rect = pygame.Rect(PUZZLE_BOARD_X - 6, PUZZLE_BOARD_Y - 6,
+                             PUZZLE_BOARD_PX + 12, PUZZLE_BOARD_PX + 12)
+    pygame.draw.rect(screen, (0, 0, 0), board_rect.move(4, 6), border_radius=14)
+    pygame.draw.rect(screen, COLOR_GROUND, board_rect, border_radius=14)
+    pygame.draw.rect(screen, COLOR_OUTLINE, board_rect, 3, border_radius=14)
+
+    # Ease slides toward 0
+    for n in list(puzzle_anim.keys()):
+        dx, dy = puzzle_anim[n]
+        decay = min(1.0, 14 * dt)
+        dx -= dx * decay
+        dy -= dy * decay
+        if abs(dx) < 0.5 and abs(dy) < 0.5:
+            del puzzle_anim[n]
+        else:
+            puzzle_anim[n] = [dx, dy]
+
+    for i in range(16):
+        n = puzzle_tiles[i]
+        if n == 0:
+            continue
+        base = _puzzle_tile_rect(i)
+        ox, oy = puzzle_anim.get(n, (0, 0))
+        tile_rect = base.move(int(ox), int(oy))
+        inner = tile_rect.inflate(-4, -4)
+
+        pygame.draw.rect(screen, (0, 0, 0), inner.move(2, 3), border_radius=10)
+        pygame.draw.rect(screen, COLOR_CREAM, inner, border_radius=10)
+
+        if puzzle_tile_images:
+            slice_surf = puzzle_tile_images[n - 1]
+            if slice_surf.get_size() != (inner.width, inner.height):
+                slice_surf = pygame.transform.smoothscale(slice_surf, (inner.width, inner.height))
+            screen.blit(slice_surf, inner.topleft)
+
+        pygame.draw.rect(screen, COLOR_OUTLINE, inner, 3, border_radius=10)
+
+    if _puzzle_preview_active() and puzzle_full_image is not None:
+        t = time.time() - puzzle_preview_start
+        if t < PUZZLE_PREVIEW_HOLD:
+            alpha = 255
+        else:
+            p = (t - PUZZLE_PREVIEW_HOLD) / PUZZLE_PREVIEW_DISSOLVE
+            alpha = int(255 * (1 - p))
+        overlay = puzzle_full_image.copy()
+        overlay.set_alpha(max(0, min(255, alpha)))
+        screen.blit(overlay, (PUZZLE_BOARD_X, PUZZLE_BOARD_Y))
+
+    auto_rect = pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38)
+    draw_crafted_button(screen, auto_rect, "Auto Win", font_ui, COLOR_BLUSH)
+
+    if _hint_button_visible():
+        base = _hint_button_rect()
+        if hint_button_reveal_time is not None:
+            reveal_t = time.time() - hint_button_reveal_time
+            if reveal_t < HINT_BUTTON_REVEAL_DUR:
+                p = reveal_t / HINT_BUTTON_REVEAL_DUR
+                s = 1.70158
+                scale = 1 + ((p - 1) ** 3) * (s + 1) + ((p - 1) ** 2) * s
+            else:
+                scale = 1.0
+        else:
+            scale = 1.0
+        scale = max(0.05, scale)
+        anim_rect = pygame.Rect(0, 0,
+                                max(1, int(base.width * scale)),
+                                max(1, int(base.height * scale)))
+        anim_rect.center = base.center
+        draw_crafted_button(screen, anim_rect, "HINT", font_ui, COLOR_YELLOW)
+
+    if hint_popup_start is not None:
+        _draw_hint_popup(screen)
+
 
 def draw_playing(screen, dt, limit, elapsed_time, cards):
     crafted_bg.draw(screen, dt)
@@ -1307,68 +2323,159 @@ def draw_playing(screen, dt, limit, elapsed_time, cards):
     auto_rect = pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38)
     draw_crafted_button(screen, auto_rect, "Auto Win", font_ui, COLOR_BLUSH)
 
-def draw_trivia(screen, dt, question_idx, trivia_remaining):
+def _draw_trivia_banner_to(surf, banner_y):
+    """Banner + stars + headline text, drawn to `surf` with the banner's top
+    at `banner_y`. Used by both the static and animated paths."""
+    eyebrow_h  = font_ui.get_height()
+    headline_h = font_win.get_height()
+    banner_h   = eyebrow_h + headline_h + 22
+    _draw_banner(surf, pygame.Rect(10, banner_y, WIDTH-20, banner_h))
+    _draw_star(surf, 24,        banner_y + banner_h // 2, 7, COLOR_YELLOW)
+    _draw_star(surf, WIDTH-24,  banner_y + banner_h // 2, 7, COLOR_YELLOW)
+    draw_soft_text(surf, "Who wants to eat like a", font_ui, COLOR_CREAM,
+                   (WIDTH // 2, banner_y + 11 + eyebrow_h // 2))
+    draw_soft_text(surf, "MA-MILLIONAIRE", font_win, COLOR_CREAM,
+                   (WIDTH // 2, banner_y + 11 + eyebrow_h + headline_h // 2),
+                   max_width=WIDTH - 48)
+
+
+def _draw_trivia_card_to(surf, rect, question_text):
+    """Cream question card with shadow + outline + wrapped question text."""
+    pygame.draw.rect(surf, (0, 0, 0),     (rect.x+4, rect.y+5, rect.width, rect.height), border_radius=14)
+    pygame.draw.rect(surf, COLOR_GROUND,  rect, border_radius=14)
+    pygame.draw.rect(surf, COLOR_OUTLINE, rect, 3, border_radius=14)
+    lines = wrap_text(question_text, font_ui, rect.width - 28)
+    line_h = font_ui.get_height()
+    qy = rect.centery - (line_h * len(lines)) // 2
+    for line in lines:
+        q_txt = font_ui.render(line, True, COLOR_OUTLINE)
+        surf.blit(q_txt, (rect.centerx - q_txt.get_width() // 2, qy))
+        qy += line_h
+
+
+def draw_trivia(screen, dt, question_idx):
     crafted_bg.draw(screen, dt)
 
     q_rect, start_y = get_trivia_layout()
 
-    # ── Title banner ─────────────────────────────────────────────────────────
-    title_lines = wrap_text("Who Wants to Win a Nap?", font_win, WIDTH - 48)
-    th = font_win.get_height()
-    banner_h = th * len(title_lines) + 22
-    _draw_banner(screen, pygame.Rect(10, 6, WIDTH-20, banner_h))
-    _draw_star(screen, 24,        6+banner_h//2, 7, COLOR_YELLOW)
-    _draw_star(screen, WIDTH-24,  6+banner_h//2, 7, COLOR_YELLOW)
-    ty = 6 + 11
-    for line in title_lines:
-        draw_soft_text(screen, line, font_win, COLOR_CREAM, (WIDTH//2, ty + th//2))
-        ty += th
+    eyebrow_h  = font_ui.get_height()
+    headline_h = font_win.get_height()
+    banner_h   = eyebrow_h + headline_h + 22
+    banner_y   = 70
 
-    # ── Per-question timer bar ────────────────────────────────────────────────
-    bar_y = banner_h + 14
-    bar_w = int((max(0, trivia_remaining) / TRIVIA_TIME_LIMIT) * (WIDTH - 40))
-    pygame.draw.rect(screen, COLOR_OUTLINE, (20, bar_y, WIDTH-40, 16), border_radius=8)
-    pygame.draw.rect(screen, (200, 220, 255), (22, bar_y+2, WIDTH-44, 12), border_radius=6)
-    pygame.draw.rect(screen, COLOR_OUTLINE, (20, bar_y, WIDTH-40, 16), 3, border_radius=8)
-    if bar_w > 0:
-        if trivia_remaining < 10:
-            pulse = abs(math.sin(time.time() * 4)) * 0.3
-            bar_color = (255, int(80 + pulse * 100), 60)
-        elif trivia_remaining < 15:
-            bar_color = (255, 200, 0)
-        else:
-            bar_color = COLOR_YELLOW
-        pygame.draw.rect(screen, bar_color, (22, bar_y+2, max(0, bar_w-4), 12), border_radius=6)
+    # Hero intro — only on the first question (entry from menu, or after
+    # TRY AGAIN restart — both reset trivia_question_start). Subsequent
+    # questions render at their final state immediately.
+    INTRO_TOTAL = 2.55
+    if question_idx == 0:
+        intro_t = time.time() - trivia_question_start
+    else:
+        intro_t = INTRO_TOTAL + 1.0
+
+    def phase(start, dur):
+        return max(0.0, min(1.0, (intro_t - start) / dur))
+
+    # ── Title banner — staged hero reveal ───────────────────────────────────
+    if intro_t >= 1.30:
+        _draw_trivia_banner_to(screen, banner_y)
+    else:
+        # 1) Banner shape drops from far above, fades in
+        bp = phase(0.00, 0.55)
+        slide = int((1 - _ease_out_cubic(bp)) * -240)
+        b_alpha = min(255, int(bp * 2.0 * 255))
+        bs = pygame.Surface((WIDTH, banner_h + 24), pygame.SRCALPHA)
+        _draw_banner(bs, pygame.Rect(10, 12, WIDTH - 20, banner_h))
+        bs.set_alpha(b_alpha)
+        screen.blit(bs, (0, banner_y - 12 + slide))
+
+        # 2) Eyebrow "Who wants to eat like a" fades up
+        ep = phase(0.45, 0.40)
+        if ep > 0:
+            lift = int((1 - _ease_out_cubic(ep)) * 12)
+            es = pygame.Surface((WIDTH, eyebrow_h + 8), pygame.SRCALPHA)
+            draw_soft_text(es, "Who wants to eat like a", font_ui, COLOR_CREAM,
+                           (WIDTH // 2, (eyebrow_h + 8) // 2))
+            es.set_alpha(min(255, int(ep * 255)))
+            target_cy = banner_y + 11 + eyebrow_h // 2 + lift
+            screen.blit(es, es.get_rect(center=(WIDTH // 2, target_cy)))
+
+        # 3) MA-MILLIONAIRE punches in with overshoot scale
+        hp = phase(0.75, 0.50)
+        if hp > 0:
+            scale = max(0.05, 1.6 - 0.6 * _ease_out_back(hp))
+            h_alpha = min(255, int(hp * 1.6 * 255))
+            hs = pygame.Surface((WIDTH, headline_h + 16), pygame.SRCALPHA)
+            draw_soft_text(hs, "MA-MILLIONAIRE", font_win, COLOR_CREAM,
+                           (WIDTH // 2, (headline_h + 16) // 2),
+                           max_width=WIDTH - 48)
+            sw = max(1, int(hs.get_width() * scale))
+            sh = max(1, int(hs.get_height() * scale))
+            scaled = pygame.transform.smoothscale(hs, (sw, sh))
+            scaled.set_alpha(h_alpha)
+            target_cy = banner_y + 11 + eyebrow_h + headline_h // 2
+            screen.blit(scaled, scaled.get_rect(center=(WIDTH // 2, target_cy)))
+
+        # 4) Stars sparkle in with overshoot
+        sp = phase(0.90, 0.40)
+        if sp > 0:
+            ss = max(0.05, _ease_out_back(sp))
+            star_r = max(1, int(7 * ss))
+            _draw_star(screen, 24,       banner_y + banner_h // 2, star_r, COLOR_YELLOW)
+            _draw_star(screen, WIDTH-24, banner_y + banner_h // 2, star_r, COLOR_YELLOW)
 
     if question_idx >= len(TRIVIA_QUESTIONS):
         return
 
     q_data = TRIVIA_QUESTIONS[question_idx]
 
-    # ── Question card ─────────────────────────────────────────────────────────
-    pygame.draw.rect(screen, (0, 0, 0),      (q_rect.x+4, q_rect.y+5, q_rect.width, q_rect.height), border_radius=14)
-    pygame.draw.rect(screen, COLOR_GROUND,    q_rect, border_radius=14)
-    pygame.draw.rect(screen, COLOR_OUTLINE,   q_rect, 3, border_radius=14)
+    # ── Question card — pop in with bouncy scale ────────────────────────────
+    cp = phase(1.40, 0.50)
+    if cp >= 1.0:
+        _draw_trivia_card_to(screen, q_rect, q_data["question"])
+    elif cp > 0:
+        scale = max(0.05, _ease_out_back(cp))
+        alpha = min(255, int(cp * 2.5 * 255))
+        ts = pygame.Surface((q_rect.width + 20, q_rect.height + 20), pygame.SRCALPHA)
+        local_q = pygame.Rect(10, 10, q_rect.width, q_rect.height)
+        _draw_trivia_card_to(ts, local_q, q_data["question"])
+        sw = max(1, int(ts.get_width() * scale))
+        sh = max(1, int(ts.get_height() * scale))
+        scaled = pygame.transform.smoothscale(ts, (sw, sh))
+        scaled.set_alpha(alpha)
+        screen.blit(scaled, scaled.get_rect(center=q_rect.center))
 
-    q_lines = wrap_text(q_data["question"], font_ui, q_rect.width - 28)
-    line_h  = font_ui.get_height()
-    qy = q_rect.centery - (line_h * len(q_lines)) // 2
-    for line in q_lines:
-        q_txt = font_ui.render(line, True, COLOR_OUTLINE)
-        screen.blit(q_txt, (q_rect.centerx - q_txt.get_width()//2, qy))
-        qy += line_h
-
-    # ── Answer buttons (alternating blue / pink) ──────────────────────────────
+    # ── Answer buttons — slide up from below + pop in, staggered ────────────
     OPT_COLORS = [(100, 196, 248), COLOR_BLUSH, (100, 196, 248), COLOR_BLUSH]
     mx, my = pygame.mouse.get_pos()
     for i, opt in enumerate(q_data["options"]):
         opt_rect = pygame.Rect(WIDTH//2 - 185, start_y + i*82, 370, 66)
-        col = COLOR_BLUSH if opt_rect.collidepoint(mx, my) else OPT_COLORS[i]
-        draw_crafted_button(screen, opt_rect, opt, font_ui, col)
+        col = COLOR_YELLOW if opt_rect.collidepoint(mx, my) else OPT_COLORS[i]
+        bp_i = phase(1.65 + i * 0.10, 0.40)
+        if bp_i <= 0:
+            continue
+        if bp_i >= 1.0:
+            draw_crafted_button(screen, opt_rect, opt, font_ui, col)
+        else:
+            slide = int((1 - _ease_out_back(bp_i)) * 90)
+            alpha = min(255, int(bp_i * 2.5 * 255))
+            ts = pygame.Surface((opt_rect.width + 20, opt_rect.height + 20), pygame.SRCALPHA)
+            draw_crafted_button(ts, pygame.Rect(10, 10, opt_rect.width, opt_rect.height),
+                                opt, font_ui, col)
+            ts.set_alpha(alpha)
+            screen.blit(ts, (opt_rect.x - 10, opt_rect.y - 10 + slide))
 
-    # ── Auto Win button ──────────────────────────────────────────────────────
+    # ── Auto-win button — fades in last ─────────────────────────────────────
     auto_rect = pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38)
-    draw_crafted_button(screen, auto_rect, "Auto Win", font_ui, COLOR_BLUSH)
+    ap = phase(2.20, 0.35)
+    if ap >= 1.0:
+        draw_crafted_button(screen, auto_rect, "Auto Win", font_ui, COLOR_BLUSH)
+    elif ap > 0:
+        alpha = min(255, int(ap * 255))
+        ts = pygame.Surface((auto_rect.width + 20, auto_rect.height + 20), pygame.SRCALPHA)
+        draw_crafted_button(ts, pygame.Rect(10, 10, auto_rect.width, auto_rect.height),
+                            "Auto Win", font_ui, COLOR_BLUSH)
+        ts.set_alpha(alpha)
+        screen.blit(ts, (auto_rect.x - 10, auto_rect.y - 10))
 
 def draw_modal(screen, modal_image, modal_start_time):
     m_elapsed = time.time() - modal_start_time
@@ -1599,20 +2706,20 @@ def draw_secret_reward(screen, dt, win_animation_start_time, win_particles):
 
     return menu_button_rect
 
-def draw_trivia_correct(screen, dt, start_time, question_idx, heart_pos):
-    draw_trivia(screen, dt, question_idx, TRIVIA_TIME_LIMIT)
+def draw_trivia_correct(screen, dt, start_time, question_idx, heart_pos, items):
+    draw_trivia(screen, dt, question_idx)
     elapsed = time.time() - start_time
 
-    for i in range(3):
-        offset_x = (i - 1) * 40
+    for i, item_type in enumerate(items):
+        offset_x = (i - 1) * 50
         delay = i * 0.15
         t = max(0, elapsed - delay)
         if t <= 0:
             continue
-        hy = heart_pos[1] - t * 180
-        alpha = max(0, 255 - int(t * 220))
-        size = 0.8 + t * 0.6
-        draw_vector_heart(screen, heart_pos[0] + offset_x, hy, size, COLOR_BLUSH, alpha)
+        hy = heart_pos[1] - t * 200
+        alpha = max(0, 255 - int(t * 255))
+        size = 1.5 + t * 0.5
+        _draw_brunch_item(screen, item_type, heart_pos[0] + offset_x, hy, size, alpha)
 
     return elapsed > 1.2
 
@@ -1620,7 +2727,7 @@ def draw_trivia_fail_fade(screen, dt, start_time, question_idx):
     elapsed = time.time() - start_time
     
     temp_surf = pygame.Surface((WIDTH, HEIGHT))
-    draw_trivia(temp_surf, dt, question_idx, TRIVIA_TIME_LIMIT)
+    draw_trivia(temp_surf, dt, question_idx)
     
     shake_x, shake_y = 0, 0
     if elapsed < 0.4:
@@ -1662,13 +2769,13 @@ def draw_pdf_viewer(screen, pdf_surf, surf_h, scroll_y):
 def draw_won_gameover(screen, dt, game_state_val, selected_idx, win_animation_start_time, win_particles, scroll_y, menu_images):
     msg = REWARDS[selected_idx] if game_state_val == GameState.WON else "Better luck next time!"
     current_img = reward_images.get(selected_idx)
-    
+    btn_label = "LET'S EAT" if (game_state_val == GameState.WON and selected_idx == 0) else "GOOD JOB!"
+
     menu_button_rect = None
     save_button_rect = None
     
-    if game_state_val == GameState.WON and (current_img is not None or (selected_idx == 2 and len(menu_images) > 0)):
-        if selected_idx == 2:
-            screen.fill(COLOR_PAPER_BG)
+    if game_state_val == GameState.WON and current_img is not None:
+        crafted_bg.draw(screen, dt)
 
         for p in win_particles:
             p["y"] -= p["speed"] * dt
@@ -1680,31 +2787,33 @@ def draw_won_gameover(screen, dt, game_state_val, selected_idx, win_animation_st
         progress = min(1.0, win_elapsed / 0.7)
         eased_progress = 1 - (1 - progress) ** 4
 
-        if selected_idx == 2:
-            y_pos = 20 - scroll_y
-            for img in menu_images:
-                screen.blit(img, (50, y_pos))
-                y_pos += img.get_height() + 20
-            
-            menu_button_rect = pygame.Rect(WIDTH - 120, HEIGHT - 60, 100, 40)
-            draw_crafted_button(screen, menu_button_rect, "Menu", font_ui, COLOR_BLUSH)
-        else:
+        if True:
             # wrap the reward message so it never overflows the 450px canvas
-            msg_lines = wrap_text(msg, font_win, WIDTH - 30)
-            line_h = font_win.get_height()
-            msg_block_h = line_h * len(msg_lines)
-            img_top = msg_block_h + 20
+            if msg.strip():
+                msg_lines = wrap_text(msg, font_win, WIDTH - 30)
+                line_h = font_win.get_height()
+                msg_block_h = line_h * len(msg_lines)
+                img_top = msg_block_h + 20
+            else:
+                msg_lines = []
+                line_h = font_win.get_height()
+                msg_block_h = 0
+                img_top = 10
 
             avail_h = HEIGHT - img_top - 80
-            base_scale = min(1.0, avail_h / current_img.get_height(), (WIDTH - 40) / current_img.get_width())
+            base_scale = min(1.0, avail_h / current_img.get_height(), (WIDTH - 20) / current_img.get_width())
             base_w, base_h = int(current_img.get_width() * base_scale), int(current_img.get_height() * base_scale)
             curr_w, curr_h = int(base_w * eased_progress), int(base_h * eased_progress)
 
             if curr_w > 0 and curr_h > 0:
-                pad = 15
+                pad = 0 if msg_block_h == 0 else 15
                 img_x = WIDTH//2 - curr_w//2
-                img_y = img_top + (base_h - curr_h)//2
-                pygame.draw.rect(screen, (255, 255, 255), (img_x - pad, img_y - pad, curr_w + pad*2, curr_h + pad*2))
+                if msg_block_h == 0:
+                    img_y = img_top + (avail_h - curr_h) // 2
+                else:
+                    img_y = img_top + (base_h - curr_h)//2
+                if pad > 0:
+                    pygame.draw.rect(screen, (255, 255, 255), (img_x - pad, img_y - pad, curr_w + pad*2, curr_h + pad*2))
                 scaled_img = pygame.transform.smoothscale(current_img, (curr_w, curr_h))
                 screen.blit(scaled_img, (img_x, img_y))
 
@@ -1718,7 +2827,6 @@ def draw_won_gameover(screen, dt, game_state_val, selected_idx, win_animation_st
                     msg_y += line_h
 
                 menu_button_rect = pygame.Rect(WIDTH//2 - 100, HEIGHT - 60, 200, 40)
-                btn_label = "Booked for 2pm" if selected_idx == 1 else "Momma's Menu"
                 draw_crafted_button(screen, menu_button_rect, btn_label, font_ui, COLOR_BLUSH)
     else:
         crafted_bg.draw(screen, dt)
@@ -1729,8 +2837,20 @@ def draw_won_gameover(screen, dt, game_state_val, selected_idx, win_animation_st
             draw_vector_heart(screen, p["x"] + sway, p["y"], p["size"], p["color"], 150)
         draw_vector_heart(screen, WIDTH//2, HEIGHT//2 - 60, 6.0, COLOR_BLUSH)
         draw_soft_text(screen, msg, font_win, COLOR_CREAM, (WIDTH//2, HEIGHT//2 + 40), max_width=WIDTH - 40)
-        menu_button_rect = pygame.Rect(WIDTH//2 - 80, HEIGHT//2 + 100, 160, 50)
-        draw_crafted_button(screen, menu_button_rect, "MENU", font_ui, COLOR_BLUSH)
+
+        is_trivia = (selected_idx is not None
+                     and 0 <= selected_idx < len(options)
+                     and options[selected_idx].get("type") == "trivia")
+        if is_trivia:
+            # Brunch failure: offer retry + menu (handler at MOUSEBUTTONDOWN
+            # already restarts trivia when save_button_rect is clicked).
+            save_button_rect = pygame.Rect(WIDTH//2 - 120, HEIGHT//2 + 100, 240, 52)
+            draw_crafted_button(screen, save_button_rect, "TRY AGAIN, MAMA!", font_ui, COLOR_BLUSH)
+            menu_button_rect = pygame.Rect(WIDTH//2 - 80, HEIGHT//2 + 168, 160, 44)
+            draw_crafted_button(screen, menu_button_rect, "MENU", font_ui, COLOR_SAGE)
+        else:
+            menu_button_rect = pygame.Rect(WIDTH//2 - 80, HEIGHT//2 + 100, 160, 50)
+            draw_crafted_button(screen, menu_button_rect, "GOOD JOB!", font_ui, COLOR_BLUSH)
 
     return menu_button_rect, save_button_rect
 
@@ -1758,7 +2878,7 @@ async def main():
             await asyncio.sleep(1)
 
 async def _main():
-    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape, trivia_question_start, secret_button_appear_time, secret_unlocked_seen
+    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape, trivia_question_start, secret_button_appear_time, secret_unlocked_seen, hint_popup_start, hint_click_count, puzzle_preview_start, puzzle_full_image, puzzle_move_count, hint_button_reveal_time
     global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui, font_huge
 
     pygame.display.init()
@@ -1816,9 +2936,37 @@ async def _main():
     game_images = load_images()
 
     reward_images = {}
+    brunch_hero = None
+    nola_logo = None
+    massage_hero = None
+    sereno_logo = None
     try:
-        root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        files = {0: "nap.jpg", 1: "massage.jpg", 2: "dinner.jpg"}
+        img_dir = os.path.dirname(os.path.abspath(__file__))
+        root_path = os.path.dirname(img_dir)
+        for fname in ("brunch2.jpeg", "brunch2.jpg", "Amal-Pancakes.jpg", "Amal-Pancakes.jpeg", "Amal-Pancakes.png"):
+            p = os.path.join(img_dir, fname)
+            if os.path.exists(p):
+                brunch_hero = pygame.image.load(p).convert_alpha()
+                break
+        for fname in ("nola.webp", "NOLA.webp", "NOLA.png", "nola.png", "nola-logo.png", "NOLA-logo.png", "NOLA.jpg", "nola.jpg"):
+            p = os.path.join(img_dir, fname)
+            if os.path.exists(p):
+                nola_logo = pygame.image.load(p).convert_alpha()
+                break
+        for fname in ("therapeute.jpg", "gettyimages-1590247404-170667a.jpg", "massage-hero.jpg", "massage-hero.png"):
+            p = os.path.join(img_dir, fname)
+            if os.path.exists(p):
+                massage_hero = pygame.image.load(p).convert_alpha()
+                break
+        for fname in ("Sereno-logo.png", "sereno-logo.png", "Sereno.png", "sereno.png"):
+            p = os.path.join(img_dir, fname)
+            if os.path.exists(p):
+                sereno_logo = pygame.image.load(p).convert_alpha()
+                _black = pygame.Surface(sereno_logo.get_size(), pygame.SRCALPHA)
+                _black.fill((0, 0, 0, 255))
+                sereno_logo.blit(_black, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+                break
+        files = {1: "massage.jpg", 2: "dinner.jpg"}
         for idx, fname in files.items():
             path = os.path.join(root_path, fname)
             if os.path.exists(path):
@@ -1914,6 +3062,26 @@ async def _main():
     except Exception:
         font_ui = pygame.font.SysFont(None, 24)
 
+    try:
+        reward_images[0] = _build_reward_takeover(
+            "MOTHER'S DAY BRUNCH", brunch_hero,
+            "Reso for 4 @ 11AM",
+            "NOLA Toronto",
+            logo_img=nola_logo)
+        reward_images[1] = _build_reward_takeover(
+            "MOTHER'S DAY MASSAGE", massage_hero,
+            "1:45PM",
+            "Spa Sereno",
+            logo_img=sereno_logo)
+        reward_images[2] = _build_reward_takeover(
+            "MOTHER'S DAY DINNER", nodo_image,
+            "Sunday, May 10  .  6:30 PM",
+            "NODO Leslieville, Toronto")
+    except Exception:
+        if 0 not in reward_images and brunch_hero is None:
+            try: reward_images[0] = _generate_brunch_reservation_card()
+            except Exception: pass
+
     scroll_y = 0
     nodo_start_time = 0
     transition_start_time = 0
@@ -1927,6 +3095,7 @@ async def _main():
     pdf_close_rect = None
     correct_anim_start = 0
     correct_anim_pos = (WIDTH // 2, HEIGHT // 2)
+    correct_anim_items = []
     while running:
         dt = clock.tick(60) / 1000
 
@@ -1955,12 +3124,19 @@ async def _main():
             draw_menu(screen, dt, selected_idx, completed_games)
             
         elif game_state == GameState.PLAYING_TRIVIA:
-            trivia_remaining = TRIVIA_TIME_LIMIT - (time.time() - trivia_question_start)
-            draw_trivia(screen, dt, current_question_idx, trivia_remaining)
-            if trivia_remaining <= 0:
-                game_state = GameState.TRIVIA_FAIL_FADE
+            draw_trivia(screen, dt, current_question_idx)
+
+        elif game_state == GameState.PLAYING_PUZZLE:
+            limit = options[selected_idx]["limit"]
+            elapsed = (time.time() - start_time) - paused_time
+            draw_playing_puzzle(screen, dt, limit, elapsed)
+            if limit and (limit - elapsed) <= 0:
+                game_state = GameState.GAMEOVER
+            elif not puzzle_anim and _puzzle_solved():
+                completed_games.add(selected_idx)
+                game_state = GameState.TRANSITION_TO_REWARD
                 transition_start_time = time.time()
-                trigger_vibration()
+                transition_particles = []
 
         elif game_state in [GameState.PLAYING, GameState.MODAL]:
             limit = options[selected_idx]["limit"]
@@ -2016,27 +3192,26 @@ async def _main():
                         win_particles = [{"x": random.randint(0, WIDTH), "y": random.randint(0, HEIGHT),
                                           "size": random.uniform(1.0, 3.0), "speed": random.uniform(100, 200),
                                           "seed": random.random(), "color": random.choice([COLOR_SOFT_PINK, COLOR_ROSE_GOLD, COLOR_CREAM])} for _ in range(40)]
-                else:  # Nap
-                    game_state = GameState.MENU
-                    selected_idx = None
-
-        elif game_state == GameState.PLAY_VIDEO_REWARD:
-            if IS_WEB:
-                await play_video_web("https://troygeoghegan.github.io/Operation-Big-Mama/nodo.mp4")
-                if selected_idx == 2:  # dinner → show the live restaurant menu, then return
-                    await show_online_menu()
-                    game_state = GameState.MENU
-                    selected_idx = None
-                else:
+                else:  # Brunch — cut to reward image with GOOD JOB button
                     game_state = GameState.WON
                     scroll_y = 0
                     win_animation_start_time = time.time()
                     win_particles = [{"x": random.randint(0, WIDTH), "y": random.randint(0, HEIGHT),
                                       "size": random.uniform(1.0, 3.0), "speed": random.uniform(100, 200),
                                       "seed": random.random(), "color": random.choice([COLOR_SOFT_PINK, COLOR_ROSE_GOLD, COLOR_CREAM])} for _ in range(40)]
+
+        elif game_state == GameState.PLAY_VIDEO_REWARD:
+            if IS_WEB:
+                await play_video_web("https://troygeoghegan.github.io/Operation-Big-Mama/nodo.mp4")
+                game_state = GameState.WON
+                scroll_y = 0
+                win_animation_start_time = time.time()
+                win_particles = [{"x": random.randint(0, WIDTH), "y": random.randint(0, HEIGHT),
+                                  "size": random.uniform(1.0, 3.0), "speed": random.uniform(100, 200),
+                                  "seed": random.random(), "color": random.choice([COLOR_SOFT_PINK, COLOR_ROSE_GOLD, COLOR_CREAM])} for _ in range(40)]
             else:
                 skipped = await play_video(nodo_video_path)
-                if skipped:
+                if skipped and selected_idx == 2:
                     game_state = GameState.PDF_VIEWER
                     pdf_scroll_y = 0
                 elif nodo_image is not None:
@@ -2060,7 +3235,7 @@ async def _main():
             menu_button_rect = draw_secret_reward(screen, dt, win_animation_start_time, win_particles)
 
         elif game_state == GameState.TRIVIA_CORRECT:
-            if draw_trivia_correct(screen, dt, correct_anim_start, current_question_idx, correct_anim_pos):
+            if draw_trivia_correct(screen, dt, correct_anim_start, current_question_idx, correct_anim_pos, correct_anim_items):
                 current_question_idx += 1
                 if current_question_idx >= len(TRIVIA_QUESTIONS):
                     completed_games.add(selected_idx)
@@ -2098,11 +3273,16 @@ async def _main():
                                 game_state = GameState.PLAYING_TRIVIA
                                 current_question_idx = 0
                                 trivia_question_start = time.time()
+                            elif options[selected_idx].get("type") == "puzzle":
+                                init_sliding_puzzle()
+                                game_state = GameState.PLAYING_PUZZLE
+                                start_time = time.time() + PUZZLE_PREVIEW_TOTAL
+                                paused_time = 0
                             else:
                                 cards, game_state, start_time, paused_time = create_board(game_images, options[selected_idx]["pairs"]), GameState.PLAYING, time.time(), 0
                 elif game_state == GameState.PLAYING_TRIVIA:
-                    # Auto Win for trivia
                     if pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38).collidepoint(mx, my):
+                        current_question_idx = len(TRIVIA_QUESTIONS)
                         completed_games.add(selected_idx)
                         game_state = GameState.TRANSITION_TO_REWARD
                         transition_start_time = time.time()
@@ -2116,11 +3296,36 @@ async def _main():
                                 if i == q_data["answer"]:
                                     correct_anim_start = time.time()
                                     correct_anim_pos = opt_rect.center
+                                    correct_anim_items = [random.randint(0, 2) for _ in range(3)]
                                     game_state = GameState.TRIVIA_CORRECT
                                 else:
                                     game_state = GameState.TRIVIA_FAIL_FADE
                                     transition_start_time = time.time()
                                     trigger_vibration()
+                elif game_state == GameState.PLAYING_PUZZLE and not _puzzle_preview_active():
+                    popup_up = hint_popup_start is not None
+                    if popup_up and time.time() - hint_popup_start >= HINT_POPUP_DUR and _hint_dismiss_rect().collidepoint(mx, my):
+                        hint_popup_start = None
+                    elif pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38).collidepoint(mx, my):
+                        for i in range(15):
+                            puzzle_tiles[i] = i + 1
+                        puzzle_tiles[15] = 0
+                        puzzle_anim.clear()
+                        completed_games.add(selected_idx)
+                        game_state = GameState.TRANSITION_TO_REWARD
+                        transition_start_time = time.time()
+                        transition_particles = []
+                    elif not popup_up and _hint_button_visible() and _hint_button_rect().collidepoint(mx, my):
+                        hint_popup_start = time.time()
+                        hint_click_count += 1
+                    else:
+                        for i in range(16):
+                            if _puzzle_tile_rect(i).collidepoint(mx, my):
+                                if _puzzle_try_move(i):
+                                    puzzle_move_count += 1
+                                    if puzzle_move_count == HINT_BUTTON_REVEAL_MOVES and hint_button_reveal_time is None:
+                                        hint_button_reveal_time = time.time()
+                                break
                 elif game_state == GameState.PLAYING and wait_timer <= 0:
                     if pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38).collidepoint(mx, my):
                         for c in cards: c["matched"] = True
@@ -2171,6 +3376,11 @@ async def _main():
                             game_state = GameState.PLAYING_TRIVIA
                             current_question_idx = 0
                             trivia_question_start = time.time()
+                        elif options[selected_idx].get("type") == "puzzle":
+                            init_sliding_puzzle()
+                            game_state = GameState.PLAYING_PUZZLE
+                            start_time = time.time()
+                            paused_time = 0
                         else:
                             cards, game_state, start_time, paused_time = create_board(game_images, options[selected_idx]["pairs"]), GameState.PLAYING, time.time(), 0
                         menu_button_rect = None

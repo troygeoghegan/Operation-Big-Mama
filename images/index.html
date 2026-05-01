@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>5x5 Sliding Puzzle</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #2c3e50;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            touch-action: none; /* Prevents pull-to-refresh on mobile devices */
+        }
+        h1 {
+            margin-top: 10px;
+            font-size: 28px;
+        }
+        #puzzleCanvas {
+            background-color: #34495e;
+            border: 4px solid #ecf0f1;
+            border-radius: 8px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            max-width: 95vw;
+            max-height: 95vw;
+        }
+        .controls {
+            margin-top: 25px;
+            display: flex;
+            gap: 15px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            background-color: #e74c3c;
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        button:active {
+            background-color: #c0392b;
+            transform: translateY(2px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Sliding Puzzle</h1>
+    <canvas id="puzzleCanvas" width="500" height="500"></canvas>
+
+    <div class="controls">
+        <button id="shuffleBtn">Shuffle Tiles</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('puzzleCanvas');
+        const ctx = canvas.getContext('2d');
+        const shuffleBtn = document.getElementById('shuffleBtn');
+
+        // Grid setup
+        const GRID_SIZE = 5;
+        let tileWidth, tileHeight;
+        let tiles = [];
+        let emptyTile = { r: GRID_SIZE - 1, c: GRID_SIZE - 1 };
+        let isSolved = false;
+
+        // Load a placeholder image (random nature photo)
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.src = 'https://picsum.photos/500/500?random=1';
+
+        img.onload = () => {
+            tileWidth = canvas.width / GRID_SIZE;
+            tileHeight = canvas.height / GRID_SIZE;
+            initPuzzle();
+            draw();
+        };
+
+        function initPuzzle() {
+            tiles = [];
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (r === GRID_SIZE - 1 && c === GRID_SIZE - 1) {
+                        tiles.push(null); // The bottom-right slot is empty
+                    } else {
+                        tiles.push({
+                            originalR: r,
+                            originalC: c,
+                            currentR: r,
+                            currentC: c
+                        });
+                    }
+                }
+            }
+            emptyTile = { r: GRID_SIZE - 1, c: GRID_SIZE - 1 };
+            isSolved = true;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const tile = getTileAt(r, c);
+                    if (tile) {
+                        // Slice the image and draw the tile
+                        ctx.drawImage(
+                            img,
+                            tile.originalC * tileWidth, tile.originalR * tileHeight,
+                            tileWidth, tileHeight,
+                            c * tileWidth, r * tileHeight,
+                            tileWidth, tileHeight
+                        );
+                        
+                        // Draw the tile border
+                        ctx.strokeStyle = '#2c3e50';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(c * tileWidth, r * tileHeight, tileWidth, tileHeight);
+                    }
+                }
+            }
+
+            if (isSolved && !tiles.includes(null)) {
+                // When won, draw the final missing piece
+                ctx.drawImage(
+                    img,
+                    (GRID_SIZE - 1) * tileWidth, (GRID_SIZE - 1) * tileHeight,
+                    tileWidth, tileHeight,
+                    (GRID_SIZE - 1) * tileWidth, (GRID_SIZE - 1) * tileHeight,
+                    tileWidth, tileHeight
+                );
+                
+                // Draw a victory overlay
+                ctx.fillStyle = 'rgba(46, 204, 113, 0.4)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 54px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.shadowColor = 'black';
+                ctx.shadowBlur = 10;
+                ctx.fillText("Solved!", canvas.width / 2, canvas.height / 2 + 15);
+                ctx.shadowBlur = 0; // Reset shadow
+            }
+        }
+
+        function getTileAt(r, c) {
+            return tiles.find(t => t && t.currentR === r && t.currentC === c);
+        }
+
+        function shuffle() {
+            // Ensure the puzzle remains solvable by simulating valid physical sliding moves
+            for (let i = 0; i < 400; i++) {
+                const neighbors = [
+                    { r: emptyTile.r - 1, c: emptyTile.c }, // Up
+                    { r: emptyTile.r + 1, c: emptyTile.c }, // Down
+                    { r: emptyTile.r, c: emptyTile.c - 1 }, // Left
+                    { r: emptyTile.r, c: emptyTile.c + 1 }  // Right
+                ].filter(n => n.r >= 0 && n.r < GRID_SIZE && n.c >= 0 && n.c < GRID_SIZE);
+
+                const move = neighbors[Math.floor(Math.random() * neighbors.length)];
+                const tile = getTileAt(move.r, move.c);
+                
+                if (tile) {
+                    tile.currentR = emptyTile.r;
+                    tile.currentC = emptyTile.c;
+                    emptyTile.r = move.r;
+                    emptyTile.c = move.c;
+                }
+            }
+            
+            // If we already have the full array, remove the last tile piece so we can play
+            if (!tiles.includes(null)) {
+                 const idx = tiles.findIndex(t => t.originalR === GRID_SIZE - 1 && t.originalC === GRID_SIZE - 1);
+                 if (idx !== -1) tiles[idx] = null;
+            }
+            
+            isSolved = false;
+            draw();
+        }
+
+        function checkWin() {
+            if(emptyTile.r !== GRID_SIZE - 1 || emptyTile.c !== GRID_SIZE - 1) return false;
+            for (const tile of tiles) {
+                if (tile && (tile.currentR !== tile.originalR || tile.currentC !== tile.originalC)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Pointerdown effectively supports both desktop clicks and mobile touchscreen taps
+        canvas.addEventListener('pointerdown', (e) => {
+            if (isSolved) return;
+
+            // Scale mouse coordinates accurately based on canvas CSS size
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+
+            const c = Math.floor(x / tileWidth);
+            const r = Math.floor(y / tileHeight);
+
+            // Allow movement only if the tapped block is immediately adjacent to the empty square
+            const isAdjacent = (Math.abs(r - emptyTile.r) === 1 && c === emptyTile.c) || 
+                               (Math.abs(c - emptyTile.c) === 1 && r === emptyTile.r);
+
+            if (isAdjacent) {
+                const tile = getTileAt(r, c);
+                if (tile) {
+                    tile.currentR = emptyTile.r;
+                    tile.currentC = emptyTile.c;
+                    emptyTile.r = r;
+                    emptyTile.c = c;
+
+                    isSolved = checkWin();
+                    
+                    // Fill in the missing tile automatically upon win
+                    if (isSolved) {
+                        tiles.push({
+                            originalR: GRID_SIZE - 1, originalC: GRID_SIZE - 1,
+                            currentR: GRID_SIZE - 1, currentC: GRID_SIZE - 1
+                        });
+                    }
+                    draw();
+                }
+            }
+        });
+
+        shuffleBtn.addEventListener('click', shuffle);
+    </script>
+</body>
+</html>
