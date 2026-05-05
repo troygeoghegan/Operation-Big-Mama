@@ -213,7 +213,6 @@ _last_won_anim_time = -1.0
 
 def _init_sounds():
     """Load all sound effects from images/sounds/. Safe to call once mixer is up."""
-    global SOUNDS
     try:
         if not pygame.mixer.get_init():
             return
@@ -940,10 +939,10 @@ async def play_video(filepath, max_duration=None):
 
             pygame.event.clear()
             
-        return skipped
+        return result
     except Exception as e:
         print(f"Video Error: {e}")
-        return False
+        return "ended"
 
 crafted_bg = None
 game_images = []
@@ -2426,7 +2425,6 @@ def draw_trivia(screen, dt, question_idx):
     # Hero intro on Q0 (entry from menu / TRY AGAIN restart).
     # Subsequent questions skip the banner-reveal portion (1.30s) so only the
     # question card + answer buttons + auto-win re-animate as a round transition.
-    INTRO_TOTAL = 2.55
     intro_t = time.time() - trivia_question_start
     if question_idx > 0:
         intro_t += 1.30
@@ -3350,14 +3348,12 @@ async def _main():
                                   "size": random.uniform(1.0, 3.0), "speed": random.uniform(100, 200),
                                   "seed": random.random(), "color": random.choice([COLOR_SOFT_PINK, COLOR_ROSE_GOLD, COLOR_CREAM])} for _ in range(40)]
             else:
-                skipped = await play_video(nodo_video_path)
-                if skipped and selected_idx == 2:
-                    game_state = GameState.PDF_VIEWER
-                    pdf_scroll_y = 0
-                elif nodo_image is not None:
-                    game_state = GameState.NODO_REVEAL
-                    nodo_start_time = time.time()
+                max_dur = 10.0 if selected_idx == 2 else None
+                result = await play_video(nodo_video_path, max_duration=max_dur)
+                if result == "menu":
+                    game_state = GameState.MENU
                 else:
+                    # Skip or natural end → animated WON card
                     game_state = GameState.WON
                     scroll_y = 0
                     win_animation_start_time = time.time()
