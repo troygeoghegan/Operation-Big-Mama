@@ -76,6 +76,31 @@ def build_web():
     return out
 
 
+def cache_bust(web_dir):
+    """Append a per-deploy version suffix to the python bundle filenames
+    (images.apk / images.tar.gz) and patch index.html to match. The browser
+    sees a brand-new URL each deploy, so any cached old bundle is bypassed.
+    Returns the version string used.
+    """
+    version = time.strftime("%Y%m%d%H%M%S")
+    renames = []
+    for old_name in ("images.apk", "images.tar.gz"):
+        old_path = os.path.join(web_dir, old_name)
+        if os.path.isfile(old_path):
+            new_name = old_name.replace("images.", f"images-{version}.")
+            shutil.move(old_path, os.path.join(web_dir, new_name))
+            renames.append((old_name, new_name))
+    idx = os.path.join(web_dir, "index.html")
+    if os.path.isfile(idx) and renames:
+        with open(idx, "r", encoding="utf-8") as f:
+            html = f.read()
+        for old, new in renames:
+            html = html.replace(f'"{old}"', f'"{new}"')
+        with open(idx, "w", encoding="utf-8") as f:
+            f.write(html)
+    return version
+
+
 def deploy_to_gh_pages(web_dir):
     # Wipe any leftover worktree from a prior run
     if os.path.isdir(WORKTREE_DIR):
@@ -85,9 +110,16 @@ def deploy_to_gh_pages(web_dir):
     # -B resets local gh-pages to origin/gh-pages and checks it out
     run(["git", "worktree", "add", "-B", "gh-pages", WORKTREE_DIR, "origin/gh-pages"])
 
-    # Overlay the new build onto gh-pages (don't wipe — preserves
-    # manually-uploaded assets like nodo.mp4, nodo_logo.png that the game
-    # loads by absolute URL).
+    # Remove stale versioned bundles from gh-pages so it doesn't bloat over
+    # time. (Static assets like nodo.mp4 / nodo_logo.png / favicon.png stay.)
+    for entry in os.listdir(WORKTREE_DIR):
+        if entry == ".git":
+            continue
+        if entry.startswith("images") and (entry.endswith(".apk") or entry.endswith(".tar.gz")):
+            os.remove(os.path.join(WORKTREE_DIR, entry))
+
+    # Overlay the new build onto gh-pages (don't wipe other files —
+    # preserves manually-uploaded assets that the game loads by URL).
     for entry in os.listdir(web_dir):
         src = os.path.join(web_dir, entry)
         dst = os.path.join(WORKTREE_DIR, entry)
@@ -113,6 +145,8 @@ def main():
     print(f"Deploying from: {REPO_DIR}\n")
     commit_source_if_dirty()
     web_dir = build_web()
+    version = cache_bust(web_dir)
+    print(f"Cache-busted bundle version: {version}\n")
     deploy_to_gh_pages(web_dir)
     print(f"\nDone. Live in ~30-90 seconds at:\n  {TARGET_URL}")
     print("Refresh the page on your phone to see the latest.")
