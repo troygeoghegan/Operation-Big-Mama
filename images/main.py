@@ -220,12 +220,14 @@ def _init_sounds():
         return
     snd_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sounds")
     for name in SOUND_NAMES:
-        path = os.path.join(snd_dir, name + ".wav")
-        if os.path.exists(path):
-            try:
-                SOUNDS[name] = pygame.mixer.Sound(path)
-            except Exception:
-                SOUNDS[name] = None
+        for ext in (".ogg", ".wav"):
+            path = os.path.join(snd_dir, name + ext)
+            if os.path.exists(path):
+                try:
+                    SOUNDS[name] = pygame.mixer.Sound(path)
+                except Exception:
+                    SOUNDS[name] = None
+                break
 
 def play_sound(name):
     """Play a loaded sound effect; no-op if mixer/file unavailable."""

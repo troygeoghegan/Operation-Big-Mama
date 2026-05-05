@@ -64,14 +64,17 @@ def commit_source_if_dirty():
 
 def build_web():
     print("Building web bundle (pygbag)...")
-    for old in (os.path.join(REPO_DIR, "images", "build"),
-                os.path.join(REPO_DIR, "build")):
-        if os.path.isdir(old):
-            shutil.rmtree(old, ignore_errors=True)
+    # Clear ONLY the previous web output (keep web-cache/ so pygbag's CDN
+    # downloads survive between runs).
+    for old_web in (os.path.join(REPO_DIR, "images", "build", "web"),
+                    os.path.join(REPO_DIR, "build", "web")):
+        if os.path.isdir(old_web):
+            shutil.rmtree(old_web, ignore_errors=True)
     run([sys.executable, "-m", "pygbag", "--build", "images/main.py"])
     out = find_build_web()
     if not out:
-        print("ERROR: pygbag finished but no build/web/ found.")
+        print("ERROR: pygbag finished but no build/web/ found with index.html.")
+        print("       Check internet connection on first run (pygbag fetches a CDN template).")
         sys.exit(1)
     print(f"Built: {out}\n")
     return out
