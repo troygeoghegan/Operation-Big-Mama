@@ -85,19 +85,15 @@ def deploy_to_gh_pages(web_dir):
     # -B resets local gh-pages to origin/gh-pages and checks it out
     run(["git", "worktree", "add", "-B", "gh-pages", WORKTREE_DIR, "origin/gh-pages"])
 
-    # Wipe worktree contents (preserve .git pointer) then copy the new build in
-    for entry in os.listdir(WORKTREE_DIR):
-        if entry == ".git":
-            continue
-        p = os.path.join(WORKTREE_DIR, entry)
-        if os.path.isdir(p):
-            shutil.rmtree(p)
-        else:
-            os.remove(p)
+    # Overlay the new build onto gh-pages (don't wipe — preserves
+    # manually-uploaded assets like nodo.mp4, nodo_logo.png that the game
+    # loads by absolute URL).
     for entry in os.listdir(web_dir):
         src = os.path.join(web_dir, entry)
         dst = os.path.join(WORKTREE_DIR, entry)
         if os.path.isdir(src):
+            if os.path.isdir(dst):
+                shutil.rmtree(dst)
             shutil.copytree(src, dst)
         else:
             shutil.copy2(src, dst)
