@@ -150,7 +150,7 @@ except Exception:
 REWARDS = {
     0: "",
     1: "",
-    2: "A delicious dinner is waiting for you!"
+    2: ""
 }
 
 WIDTH, HEIGHT = 412, 860
@@ -206,6 +206,35 @@ def wrap_text(text, font, max_width):
     if current:
         lines.append(current)
     return lines or [text]
+
+SOUNDS = {}
+SOUND_NAMES = ("correct", "wrong", "flip", "match", "slide", "win")
+_last_won_anim_time = -1.0
+
+def _init_sounds():
+    """Load all sound effects from images/sounds/. Safe to call once mixer is up."""
+    global SOUNDS
+    try:
+        if not pygame.mixer.get_init():
+            return
+    except Exception:
+        return
+    snd_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sounds")
+    for name in SOUND_NAMES:
+        path = os.path.join(snd_dir, name + ".wav")
+        if os.path.exists(path):
+            try:
+                SOUNDS[name] = pygame.mixer.Sound(path)
+            except Exception:
+                SOUNDS[name] = None
+
+def play_sound(name):
+    """Play a loaded sound effect; no-op if mixer/file unavailable."""
+    s = SOUNDS.get(name)
+    if s is not None:
+        try: s.play()
+        except Exception: pass
+
 
 def draw_vector_heart(surf, x, y, size, color, alpha=255):
     points = []
@@ -281,11 +310,12 @@ def _draw_brunch_item(surf, item_type, cx, cy, scale, alpha):
 
 _btn_text_cache = {}
 
-def draw_crafted_button(screen, rect, text, font, base_color):
+def draw_crafted_button(screen, rect, text, font, base_color, text_outline_color=None):
     mx, my = pygame.mouse.get_pos()
     is_hover = rect.collidepoint(mx, my)
     offset = 3 if is_hover else 0
     r = rect.height // 2
+    outline_col = text_outline_color if text_outline_color is not None else COLOR_OUTLINE
 
     # Drop shadow
     pygame.draw.rect(screen, (0, 0, 0),   (rect.x+5, rect.y+7, rect.width, rect.height), border_radius=r)
@@ -317,10 +347,10 @@ def draw_crafted_button(screen, rect, text, font, base_color):
     line_h = font.get_height()
     ty = btn.centery - (line_h * len(lines)) // 2
     for line in lines:
-        cache_key = (line, id(font))
+        cache_key = (line, id(font), outline_col)
         cached_line = _btn_text_cache.get(cache_key)
         if cached_line is None:
-            o = font.render(line, True, COLOR_OUTLINE)
+            o = font.render(line, True, outline_col)
             ts = font.render(line, True, COLOR_CREAM)
             tw, th = ts.get_size()
             ow = 2
@@ -813,46 +843,66 @@ async def show_online_menu():
     except Exception as e:
         print("menu error:", e)
 
-async def play_video(filepath):
-    if not HAS_VIDEO_LIB: return False
-    skipped = False
+async def play_video(filepath, max_duration=None):
+    """Play a video. Returns 'ended' (natural end / max_duration reached),
+    'skipped' (Skip pressed), or 'menu' (Menu pressed)."""
+    if not HAS_VIDEO_LIB: return "ended"
+    result = "ended"
     try:
         cap = cv2.VideoCapture(filepath)
-        if not cap.isOpened(): return False
-        
+        if not cap.isOpened(): return "ended"
+
         audio_path = os.path.splitext(filepath)[0] + ".mp3"
         if os.path.exists(audio_path):
             pygame.mixer.music.load(audio_path)
             pygame.mixer.music.play()
-            
+
         vid_clock = pygame.time.Clock()
         fps = cap.get(cv2.CAP_PROP_FPS) or 30
-        
+
         start_time = time.time()
-        skip_rect = pygame.Rect(WIDTH - 120, 20, 100, 40)
+        skip_rect = pygame.Rect(WIDTH//2 + 10, HEIGHT - 60, 120, 44)
+        menu_rect = pygame.Rect(WIDTH//2 - 130, HEIGHT - 60, 120, 44)
         last_surf = None
-        
+
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret: break
-            
-            skip_pressed = False
+
+            elapsed_now = time.time() - start_time
+            if max_duration is not None and elapsed_now >= max_duration:
+                result = "ended"
+                break
+
             for event in pygame.event.get():
-                if event.type == pygame.QUIT or event.type == pygame.KEYDOWN:
-                    skip_pressed = True
+                if event.type == pygame.QUIT:
+                    result = "skipped"
+                    break
+                elif event.type == pygame.KEYDOWN:
+                    result = "skipped"
+                    break
                 elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if menu_rect.collidepoint(event.pos):
+                        result = "menu"
+                        break
                     if skip_rect.collidepoint(event.pos):
-                        skip_pressed = True
-            
-            if skip_pressed:
-                skipped = True
+                        result = "skipped"
+                        break
+            if result != "ended":
                 break
             
             # Convert BGR (OpenCV) to RGB (Pygame) and rotate correctly
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame = np.transpose(frame, (1, 0, 2))
             surf = pygame.surfarray.make_surface(frame)
-            last_surf = pygame.transform.scale(surf, (WIDTH, HEIGHT))
+            sw, sh = surf.get_size()
+            # Cover: scale up so the video fills the window, cropping overflow
+            scale_factor = max(WIDTH / sw, HEIGHT / sh)
+            new_w = max(1, int(sw * scale_factor))
+            new_h = max(1, int(sh * scale_factor))
+            scaled = pygame.transform.smoothscale(surf, (new_w, new_h))
+            last_surf = pygame.Surface((WIDTH, HEIGHT))
+            last_surf.blit(scaled, ((WIDTH - new_w) // 2, (HEIGHT - new_h) // 2))
             
             screen.blit(last_surf, (0, 0))
             
@@ -864,6 +914,7 @@ async def play_video(filepath):
                 screen.blit(fade_surf, (0, 0))
                 
             if elapsed > 1.0:
+                draw_crafted_button(screen, menu_rect, "Menu", font_ui, COLOR_SAGE)
                 draw_crafted_button(screen, skip_rect, "Skip", font_ui, COLOR_BLUSH)
                 
             pygame.display.flip()
@@ -925,6 +976,7 @@ puzzle_move_count = 0
 hint_button_reveal_time = None
 hint_popup_start = None
 hint_click_count = 0
+puzzle_auto_solve_used = False
 PUZZLE_TILE_PX = 0
 PUZZLE_BOARD_PX = 0
 PUZZLE_BOARD_X = 0
@@ -1945,12 +1997,19 @@ def draw_menu(screen, dt, selected_idx, completed_games):
         btn_surf.set_alpha(btn_alpha)
         screen.blit(btn_surf, (anim_rect.x - 4, anim_rect.y - 4))
         if i in completed_games:
-            draw_vector_heart(screen, anim_rect.right - 28, anim_rect.centery, 1.0, COLOR_YELLOW)
+            # Completed-game indicator — slow pulse with a black stroke
+            heart_cx = anim_rect.right - 28
+            heart_cy = anim_rect.centery
+            pulse = 1.0 + 0.10 * math.sin(t * 1.6 + i * 0.7)
+            heart_size = 1.0 * pulse
+            draw_vector_heart(screen, heart_cx, heart_cy, heart_size * 1.22, (0, 0, 0), alpha=btn_alpha)
+            draw_vector_heart(screen, heart_cx, heart_cy, heart_size, COLOR_YELLOW, alpha=btn_alpha)
 
 def init_sliding_puzzle():
     """4×4 sliding-tile puzzle. Solved = tiles 1-15 in order with the blank at position 15."""
     global puzzle_tiles, puzzle_tile_images, puzzle_anim, hint_popup_start, hint_click_count
     global puzzle_full_image, puzzle_preview_start, puzzle_move_count, hint_button_reveal_time
+    global puzzle_auto_solve_used
     global PUZZLE_TILE_PX, PUZZLE_BOARD_PX, PUZZLE_BOARD_X, PUZZLE_BOARD_Y
     hint_popup_start = None
     hint_click_count = 0
@@ -1958,6 +2017,7 @@ def init_sliding_puzzle():
     puzzle_preview_start = None
     puzzle_move_count = 0
     hint_button_reveal_time = None
+    puzzle_auto_solve_used = False
 
     PUZZLE_TILE_PX = (WIDTH - 24) // 4
     PUZZLE_BOARD_PX = PUZZLE_TILE_PX * 4
@@ -2090,7 +2150,7 @@ def _hint_button_rect():
 
 
 def _hint_button_visible():
-    return puzzle_move_count >= HINT_BUTTON_REVEAL_MOVES
+    return puzzle_move_count >= HINT_BUTTON_REVEAL_MOVES and not puzzle_auto_solve_used
 
 
 def _puzzle_preview_active():
@@ -2105,7 +2165,7 @@ HINT_MESSAGES = [
     ("Are you serious?",   "Stop clicking"),
     ("This is sad now.",   "Help yourself"),
     ("Bless your heart.",  "Good luck"),
-    ("I admire you.",      "Still no"),
+    ("OK fine.",           "Take 75% off"),
 ]
 
 
@@ -2363,14 +2423,13 @@ def draw_trivia(screen, dt, question_idx):
     banner_h   = eyebrow_h + headline_h + 22
     banner_y   = 70
 
-    # Hero intro — only on the first question (entry from menu, or after
-    # TRY AGAIN restart — both reset trivia_question_start). Subsequent
-    # questions render at their final state immediately.
+    # Hero intro on Q0 (entry from menu / TRY AGAIN restart).
+    # Subsequent questions skip the banner-reveal portion (1.30s) so only the
+    # question card + answer buttons + auto-win re-animate as a round transition.
     INTRO_TOTAL = 2.55
-    if question_idx == 0:
-        intro_t = time.time() - trivia_question_start
-    else:
-        intro_t = INTRO_TOTAL + 1.0
+    intro_t = time.time() - trivia_question_start
+    if question_idx > 0:
+        intro_t += 1.30
 
     def phase(start, dur):
         return max(0.0, min(1.0, (intro_t - start) / dur))
@@ -2775,6 +2834,10 @@ def draw_won_gameover(screen, dt, game_state_val, selected_idx, win_animation_st
     save_button_rect = None
     
     if game_state_val == GameState.WON and current_img is not None:
+        global _last_won_anim_time
+        if win_animation_start_time != _last_won_anim_time:
+            play_sound("win")
+            _last_won_anim_time = win_animation_start_time
         crafted_bg.draw(screen, dt)
 
         for p in win_particles:
@@ -2784,50 +2847,104 @@ def draw_won_gameover(screen, dt, game_state_val, selected_idx, win_animation_st
             draw_vector_heart(screen, p["x"] + sway, p["y"], p["size"], p["color"], 150)
 
         win_elapsed = time.time() - win_animation_start_time
-        progress = min(1.0, win_elapsed / 0.7)
-        eased_progress = 1 - (1 - progress) ** 4
 
-        if True:
-            # wrap the reward message so it never overflows the 450px canvas
-            if msg.strip():
-                msg_lines = wrap_text(msg, font_win, WIDTH - 30)
-                line_h = font_win.get_height()
-                msg_block_h = line_h * len(msg_lines)
-                img_top = msg_block_h + 20
-            else:
-                msg_lines = []
-                line_h = font_win.get_height()
-                msg_block_h = 0
-                img_top = 10
+        # wrap the reward message so it never overflows the 450px canvas
+        if msg.strip():
+            msg_lines = wrap_text(msg, font_win, WIDTH - 30)
+            line_h = font_win.get_height()
+            msg_block_h = line_h * len(msg_lines)
+            img_top = msg_block_h + 20
+        else:
+            msg_lines = []
+            line_h = font_win.get_height()
+            msg_block_h = 0
+            img_top = 10
 
-            avail_h = HEIGHT - img_top - 80
-            base_scale = min(1.0, avail_h / current_img.get_height(), (WIDTH - 20) / current_img.get_width())
-            base_w, base_h = int(current_img.get_width() * base_scale), int(current_img.get_height() * base_scale)
+        avail_h = HEIGHT - img_top - 80
+        base_scale = min(1.0, avail_h / current_img.get_height(), (WIDTH - 20) / current_img.get_width())
+        base_w, base_h = int(current_img.get_width() * base_scale), int(current_img.get_height() * base_scale)
+        base_x = WIDTH // 2 - base_w // 2
+        base_y = img_top + (avail_h - base_h) // 2 if msg_block_h == 0 else img_top
+
+        DINNER_ANIM_TOTAL = 1.55
+        if selected_idx == 2 and win_elapsed < DINNER_ANIM_TOTAL:
+            # ── Dinner: piece-by-piece staged reveal (banner → photo → info) ──
+            # Slice the pre-built 400×780 card into 3 horizontal sections
+            full_w, full_h = current_img.get_size()
+            BANNER_END = int(full_h * (100 / 780))   # ≈ 100 in original coords
+            PHOTO_END  = int(full_h * (608 / 780))   # ≈ 608
+
+            sec_w = base_w
+            banner_h_s = int(BANNER_END * base_scale)
+            photo_h_s  = int((PHOTO_END - BANNER_END) * base_scale)
+            info_h_s   = base_h - banner_h_s - photo_h_s
+
+            def _phase(start, dur):
+                return max(0.0, min(1.0, (win_elapsed - start) / dur))
+
+            # 1) Banner — drops from far above with fade
+            bp = _phase(0.00, 0.55)
+            if bp > 0:
+                slide = int((1 - _ease_out_cubic(bp)) * -300)
+                alpha = min(255, int(bp * 2.0 * 255))
+                banner_orig = current_img.subsurface((0, 0, full_w, BANNER_END))
+                scaled_banner = pygame.transform.smoothscale(banner_orig, (sec_w, banner_h_s))
+                scaled_banner.set_alpha(alpha)
+                screen.blit(scaled_banner, (base_x, base_y + slide))
+
+            # 2) Photo — pops in with overshoot scale + fade
+            pp = _phase(0.45, 0.55)
+            if pp > 0:
+                scale_p = max(0.05, _ease_out_back(pp))
+                alpha = min(255, int(pp * 1.8 * 255))
+                photo_orig = current_img.subsurface((0, BANNER_END, full_w, PHOTO_END - BANNER_END))
+                tw = max(1, int(sec_w * scale_p))
+                th = max(1, int(photo_h_s * scale_p))
+                scaled_photo = pygame.transform.smoothscale(photo_orig, (tw, th))
+                scaled_photo.set_alpha(alpha)
+                photo_cy = base_y + banner_h_s + photo_h_s // 2
+                screen.blit(scaled_photo, scaled_photo.get_rect(center=(base_x + sec_w // 2, photo_cy)))
+
+            # 3) Info — fades in with slide up
+            ip = _phase(0.90, 0.55)
+            if ip > 0:
+                lift = int((1 - _ease_out_cubic(ip)) * 30)
+                alpha = min(255, int(ip * 1.5 * 255))
+                info_orig = current_img.subsurface((0, PHOTO_END, full_w, full_h - PHOTO_END))
+                scaled_info = pygame.transform.smoothscale(info_orig, (sec_w, info_h_s))
+                scaled_info.set_alpha(alpha)
+                info_y_target = base_y + banner_h_s + photo_h_s
+                screen.blit(scaled_info, (base_x, info_y_target + lift))
+
+            progress = win_elapsed / DINNER_ANIM_TOTAL
+        else:
+            # Existing scale-up animation for brunch/massage (and dinner post-anim)
+            progress = min(1.0, win_elapsed / 0.7)
+            eased_progress = 1 - (1 - progress) ** 4
             curr_w, curr_h = int(base_w * eased_progress), int(base_h * eased_progress)
-
             if curr_w > 0 and curr_h > 0:
                 pad = 0 if msg_block_h == 0 else 15
-                img_x = WIDTH//2 - curr_w//2
+                img_x = WIDTH // 2 - curr_w // 2
                 if msg_block_h == 0:
                     img_y = img_top + (avail_h - curr_h) // 2
                 else:
-                    img_y = img_top + (base_h - curr_h)//2
+                    img_y = img_top + (base_h - curr_h) // 2
                 if pad > 0:
                     pygame.draw.rect(screen, (255, 255, 255), (img_x - pad, img_y - pad, curr_w + pad*2, curr_h + pad*2))
                 scaled_img = pygame.transform.smoothscale(current_img, (curr_w, curr_h))
                 screen.blit(scaled_img, (img_x, img_y))
 
-            if progress >= 1.0:
-                msg_y = 10
-                for line in msg_lines:
-                    shadow = font_win.render(line, True, COLOR_SHADOW)
-                    screen.blit(shadow, (WIDTH//2 - shadow.get_width()//2 + 2, msg_y + 2))
-                    line_surf = font_win.render(line, True, COLOR_TEXT)
-                    screen.blit(line_surf, (WIDTH//2 - line_surf.get_width()//2, msg_y))
-                    msg_y += line_h
+        if progress >= 1.0:
+            msg_y = 10
+            for line in msg_lines:
+                shadow = font_win.render(line, True, COLOR_SHADOW)
+                screen.blit(shadow, (WIDTH//2 - shadow.get_width()//2 + 2, msg_y + 2))
+                line_surf = font_win.render(line, True, COLOR_TEXT)
+                screen.blit(line_surf, (WIDTH//2 - line_surf.get_width()//2, msg_y))
+                msg_y += line_h
 
-                menu_button_rect = pygame.Rect(WIDTH//2 - 100, HEIGHT - 60, 200, 40)
-                draw_crafted_button(screen, menu_button_rect, btn_label, font_ui, COLOR_BLUSH)
+            menu_button_rect = pygame.Rect(WIDTH//2 - 100, HEIGHT - 60, 200, 40)
+            draw_crafted_button(screen, menu_button_rect, btn_label, font_ui, COLOR_BLUSH, text_outline_color=(0, 0, 0))
     else:
         crafted_bg.draw(screen, dt)
         for p in win_particles:
@@ -2838,19 +2955,20 @@ def draw_won_gameover(screen, dt, game_state_val, selected_idx, win_animation_st
         draw_vector_heart(screen, WIDTH//2, HEIGHT//2 - 60, 6.0, COLOR_BLUSH)
         draw_soft_text(screen, msg, font_win, COLOR_CREAM, (WIDTH//2, HEIGHT//2 + 40), max_width=WIDTH - 40)
 
-        is_trivia = (selected_idx is not None
-                     and 0 <= selected_idx < len(options)
-                     and options[selected_idx].get("type") == "trivia")
-        if is_trivia:
-            # Brunch failure: offer retry + menu (handler at MOUSEBUTTONDOWN
-            # already restarts trivia when save_button_rect is clicked).
+        show_retry = (selected_idx is not None
+                      and 0 <= selected_idx < len(options)
+                      and options[selected_idx].get("type") in ("trivia", "memory"))
+        if show_retry:
+            # Brunch (trivia) & Dinner (memory) failure: offer TRY AGAIN + MENU.
+            # Handler at MOUSEBUTTONDOWN restarts the appropriate game type when
+            # save_button_rect is clicked.
             save_button_rect = pygame.Rect(WIDTH//2 - 120, HEIGHT//2 + 100, 240, 52)
             draw_crafted_button(screen, save_button_rect, "TRY AGAIN, MAMA!", font_ui, COLOR_BLUSH)
             menu_button_rect = pygame.Rect(WIDTH//2 - 80, HEIGHT//2 + 168, 160, 44)
             draw_crafted_button(screen, menu_button_rect, "MENU", font_ui, COLOR_SAGE)
         else:
             menu_button_rect = pygame.Rect(WIDTH//2 - 80, HEIGHT//2 + 100, 160, 50)
-            draw_crafted_button(screen, menu_button_rect, "GOOD JOB!", font_ui, COLOR_BLUSH)
+            draw_crafted_button(screen, menu_button_rect, "GOOD JOB!", font_ui, COLOR_BLUSH, text_outline_color=(0, 0, 0))
 
     return menu_button_rect, save_button_rect
 
@@ -2878,16 +2996,16 @@ async def main():
             await asyncio.sleep(1)
 
 async def _main():
-    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape, trivia_question_start, secret_button_appear_time, secret_unlocked_seen, hint_popup_start, hint_click_count, puzzle_preview_start, puzzle_full_image, puzzle_move_count, hint_button_reveal_time
+    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape, trivia_question_start, secret_button_appear_time, secret_unlocked_seen, hint_popup_start, hint_click_count, puzzle_preview_start, puzzle_full_image, puzzle_move_count, hint_button_reveal_time, puzzle_auto_solve_used
     global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui, font_huge
 
     pygame.display.init()
     pygame.font.init()
-    if not IS_WEB:
-        try:
-            pygame.mixer.init()
-        except Exception:
-            pass
+    try:
+        pygame.mixer.init()
+    except Exception:
+        pass
+    _init_sounds()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     clock = pygame.time.Clock()
 
@@ -2940,6 +3058,7 @@ async def _main():
     nola_logo = None
     massage_hero = None
     sereno_logo = None
+    dinner_hero = None
     try:
         img_dir = os.path.dirname(os.path.abspath(__file__))
         root_path = os.path.dirname(img_dir)
@@ -2965,6 +3084,11 @@ async def _main():
                 _black = pygame.Surface(sereno_logo.get_size(), pygame.SRCALPHA)
                 _black.fill((0, 0, 0, 255))
                 sereno_logo.blit(_black, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+                break
+        for fname in ("nodo.jpg", "nodo.jpeg", "nodo.png", "dinner.jpg"):
+            p = os.path.join(img_dir, fname)
+            if os.path.exists(p):
+                dinner_hero = pygame.image.load(p).convert_alpha()
                 break
         files = {1: "massage.jpg.jpeg", 2: "dinner.jpg"}
         space_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "SpaceSwarm")
@@ -2993,6 +3117,7 @@ async def _main():
     except Exception: pass
 
     nodo_image = None
+    nodo_logo = None
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         for fname in ["NODO.avif", "NODO.png", "nodo.avif", "nodo.png"]:
@@ -3002,6 +3127,14 @@ async def _main():
                 scale = min(WIDTH / nodo_image.get_width(), HEIGHT / nodo_image.get_height()) * 0.8
                 if scale < 1:
                     nodo_image = pygame.transform.smoothscale(nodo_image, (int(nodo_image.get_width() * scale), int(nodo_image.get_height() * scale)))
+                break
+        for fname in ["NODO-logo.png", "nodo-logo.png", "NODO Octagon-LeslievilleWHITE.png"]:
+            npath = os.path.join(current_dir, fname)
+            if os.path.exists(npath):
+                nodo_logo = pygame.image.load(npath).convert_alpha()
+                _black = pygame.Surface(nodo_logo.get_size(), pygame.SRCALPHA)
+                _black.fill((0, 0, 0, 255))
+                nodo_logo.blit(_black, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
                 break
     except Exception: pass
 
@@ -3079,9 +3212,10 @@ async def _main():
             "Spa Sereno",
             logo_img=sereno_logo)
         reward_images[2] = _build_reward_takeover(
-            "MOTHER'S DAY DINNER", nodo_image,
-            "Sunday, May 10  .  6:30 PM",
-            "NODO Leslieville, Toronto")
+            "MOTHER'S DAY DINNER", dinner_hero,
+            "FamJam eats @ 6:15pm",
+            "NODO Leslieville",
+            logo_img=nodo_logo)
     except Exception:
         if 0 not in reward_images and brunch_hero is None:
             try: reward_images[0] = _generate_brunch_reservation_card()
@@ -3158,6 +3292,7 @@ async def _main():
                 if wait_timer <= 0:
                     if first["image"] == second["image"]:
                         first["matched"] = second["matched"] = True
+                        play_sound("match")
                         modal_image, modal_start_time, game_state = first["image"], time.time(), GameState.MODAL
                     else:
                         first["flipped"] = second["flipped"] = False
@@ -3184,7 +3319,7 @@ async def _main():
 
         elif game_state == GameState.TRANSITION_TO_REWARD:
             if draw_transition_to_reward(screen, dt, transition_start_time, transition_particles):
-                if selected_idx in [1, 2]:  # Massage & Dinner both use the video reward flow
+                if selected_idx == 2:  # Dinner uses the NODO video reward flow
                     if IS_WEB or (nodo_video_path and HAS_VIDEO_LIB):
                         game_state = GameState.PLAY_VIDEO_REWARD
                     elif nodo_image is not None:
@@ -3197,7 +3332,7 @@ async def _main():
                         win_particles = [{"x": random.randint(0, WIDTH), "y": random.randint(0, HEIGHT),
                                           "size": random.uniform(1.0, 3.0), "speed": random.uniform(100, 200),
                                           "seed": random.random(), "color": random.choice([COLOR_SOFT_PINK, COLOR_ROSE_GOLD, COLOR_CREAM])} for _ in range(40)]
-                else:  # Brunch — cut to reward image with GOOD JOB button
+                else:  # Brunch & Massage — cut straight to the reward card
                     game_state = GameState.WON
                     scroll_y = 0
                     win_animation_start_time = time.time()
@@ -3303,13 +3438,26 @@ async def _main():
                                     correct_anim_pos = opt_rect.center
                                     correct_anim_items = [random.randint(0, 2) for _ in range(3)]
                                     game_state = GameState.TRIVIA_CORRECT
+                                    play_sound("correct")
                                 else:
                                     game_state = GameState.TRIVIA_FAIL_FADE
                                     transition_start_time = time.time()
                                     trigger_vibration()
+                                    play_sound("wrong")
                 elif game_state == GameState.PLAYING_PUZZLE and not _puzzle_preview_active():
                     popup_up = hint_popup_start is not None
                     if popup_up and time.time() - hint_popup_start >= HINT_POPUP_DUR and _hint_dismiss_rect().collidepoint(mx, my):
+                        # On the LAST hint (after 8+ clicks), the dismiss button
+                        # actually solves the puzzle to 75% — leaves 3 moves.
+                        if hint_click_count >= len(HINT_MESSAGES) and not puzzle_auto_solve_used:
+                            for i in range(12):
+                                puzzle_tiles[i] = i + 1
+                            puzzle_tiles[12] = 0
+                            puzzle_tiles[13] = 13
+                            puzzle_tiles[14] = 14
+                            puzzle_tiles[15] = 15
+                            puzzle_anim.clear()
+                            puzzle_auto_solve_used = True
                         hint_popup_start = None
                     elif pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38).collidepoint(mx, my):
                         for i in range(15):
@@ -3328,6 +3476,7 @@ async def _main():
                             if _puzzle_tile_rect(i).collidepoint(mx, my):
                                 if _puzzle_try_move(i):
                                     puzzle_move_count += 1
+                                    play_sound("slide")
                                     if puzzle_move_count == HINT_BUTTON_REVEAL_MOVES and hint_button_reveal_time is None:
                                         hint_button_reveal_time = time.time()
                                 break
@@ -3342,6 +3491,7 @@ async def _main():
                     for card in cards:
                         if card["rect"].collidepoint(mx, my) and not card["flipped"] and not card["matched"]:
                             card["flipped"] = True
+                            play_sound("flip")
                             if not first: first = card
                             elif not second: second, wait_timer = card, 0.7
                 elif game_state == GameState.SECRET_REWARD:
