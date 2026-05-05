@@ -12,3 +12,8 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# pygbag build artifacts (deploy.py rebuilds these)
+build/
+images/build/
+.gh-pages-worktree/
