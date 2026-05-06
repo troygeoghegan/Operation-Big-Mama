@@ -106,9 +106,35 @@ def deploy_to_gh_pages(web_dir):
     if os.path.isdir(WORKTREE_DIR):
         run(["git", "worktree", "remove", "--force", WORKTREE_DIR], check=False)
 
-    run(["git", "fetch", "origin", "gh-pages"])
-    # -B resets local gh-pages to origin/gh-pages and checks it out
-    run(["git", "worktree", "add", "-B", "gh-pages", WORKTREE_DIR, "origin/gh-pages"])
+    # Prune stale refs first — origin/gh-pages may have been deleted server-side
+    run(["git", "fetch", "--prune", "origin"])
+
+    ls = run(["git", "ls-remote", "--heads", "origin", "gh-pages"], capture=True)
+    has_remote = bool(ls.stdout.strip())
+    has_local = run(
+        ["git", "show-ref", "--verify", "--quiet", "refs/heads/gh-pages"],
+        check=False,
+    ).returncode == 0
+
+    if has_remote:
+        # -B resets local gh-pages to origin/gh-pages and checks it out
+        run(["git", "worktree", "add", "-B", "gh-pages", WORKTREE_DIR, "origin/gh-pages"])
+    elif has_local:
+        # Remote branch is gone but we still have local history — push will recreate it
+        print("origin/gh-pages missing; basing worktree on local gh-pages branch.")
+        run(["git", "worktree", "add", "-B", "gh-pages", WORKTREE_DIR, "gh-pages"])
+    else:
+        # First-ever deploy: create an orphan gh-pages branch
+        print("No gh-pages branch found; creating a fresh orphan branch.")
+        orphan = run(
+            ["git", "worktree", "add", "--orphan", "-b", "gh-pages", WORKTREE_DIR],
+            check=False,
+        )
+        if orphan.returncode != 0:
+            # Fallback for git < 2.42 which lacks --orphan on worktree add
+            run(["git", "worktree", "add", "--detach", WORKTREE_DIR, "HEAD"])
+            run(["git", "checkout", "--orphan", "gh-pages"], cwd=WORKTREE_DIR)
+            run(["git", "rm", "-rf", "."], cwd=WORKTREE_DIR, check=False)
 
     # Remove stale versioned bundles from gh-pages so it doesn't bloat over
     # time. (Static assets like nodo.mp4 / nodo_logo.png / favicon.png stay.)
