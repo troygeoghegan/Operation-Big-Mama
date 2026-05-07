@@ -3001,7 +3001,8 @@ async def main():
             await asyncio.sleep(1)
 
 async def _main():
-    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape, trivia_question_start, secret_button_appear_time, secret_unlocked_seen, hint_popup_start, hint_click_count, puzzle_preview_start, puzzle_full_image, puzzle_move_count, hint_button_reveal_time, puzzle_auto_solve_used, _prompt_start
+    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape, trivia_question_start, secret_button_appear_time, secret_unlocked_seen, hint_popup_start, hint_click_count, puzzle_preview_start, puzzle_full_image, puzzle_move_count, hint_button_reveal_time, puzzle_auto_solve_used, _prompt_start, debug_last_event
+    debug_last_event = "None"
     global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui, font_huge
 
     pygame.display.init()
@@ -3398,22 +3399,27 @@ async def _main():
             menu_button_rect, save_button_rect = draw_won_gameover(screen, dt, game_state, selected_idx, win_animation_start_time, win_particles, scroll_y, menu_images)
 
         for event in pygame.event.get():
+            debug_last_event = str(event)
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == pygame.KEYDOWN and game_state == GameState.PDF_VIEWER:
-                if event.key in (pygame.K_DOWN, pygame.K_RIGHT):
-                    pdf_scroll_y = min(max(0, pdf_surface_height - HEIGHT), pdf_scroll_y + 80)
-                elif event.key in (pygame.K_UP, pygame.K_LEFT):
-                    pdf_scroll_y = max(0, pdf_scroll_y - 80)
-            if event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
-                if event.type == pygame.FINGERDOWN:
+            if event.type == pygame.KEYDOWN:
+                if game_state == GameState.ORIENTATION_PROMPT:
+                    _prompt_start = None
+                    game_state = GameState.MENU
+                elif game_state == GameState.PDF_VIEWER:
+                    if event.key in (pygame.K_DOWN, pygame.K_RIGHT):
+                        pdf_scroll_y = min(max(0, pdf_surface_height - HEIGHT), pdf_scroll_y + 80)
+                    elif event.key in (pygame.K_UP, pygame.K_LEFT):
+                        pdf_scroll_y = max(0, pdf_scroll_y - 80)
+            if event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.FINGERDOWN, pygame.FINGERUP):
+                if event.type in (pygame.FINGERDOWN, pygame.FINGERUP):
                     mx, my = int(event.x * WIDTH), int(event.y * HEIGHT)
                 else:
                     mx, my = event.pos
                 if game_state == GameState.ORIENTATION_PROMPT:
                     _prompt_start = None
                     game_state = GameState.MENU
-                elif game_state == GameState.MENU:
+                elif game_state == GameState.MENU and event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
                     for i, btn_rect in enumerate(_menu_button_rects()):
                         if btn_rect.collidepoint(mx, my):
                             selected_idx = i
@@ -3560,6 +3566,14 @@ async def _main():
                     scroll_y -= event.y * 30
                     content_h = sum(img.get_height() + 20 for img in menu_images) + 20
                     scroll_y = max(0, min(scroll_y, max(0, content_h - HEIGHT)))
+
+        try:
+            mx, my = pygame.mouse.get_pos()
+            pygame.draw.circle(screen, (255, 0, 0), (mx, my), 8)
+            dbg_surf = font_ui.render(debug_last_event, True, (255, 255, 255), (0, 0, 0))
+            screen.blit(dbg_surf, (10, 10))
+        except Exception:
+            pass
 
         pygame.display.flip()
         await asyncio.sleep(0)
