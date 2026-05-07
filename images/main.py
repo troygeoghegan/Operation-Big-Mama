@@ -1083,7 +1083,7 @@ def draw_orientation_prompt(screen, dt):
     SUBTITLE    = "a little something just for you  \U0001f338"
     WORD_DELAY  = 0.20
     WORD_SWELL  = 0.22
-    words       = SUBTITLE.split(" ")
+    words       = [w for w in SUBTITLE.split(" ") if w]
 
     title_finish = WRITE_DURATION + 0.32   # brief pause after flourish
     sub_elapsed  = elapsed - title_finish
@@ -3552,4 +3552,12 @@ async def _main():
         pygame.display.flip()
         await asyncio.sleep(0)
 
-asyncio.run(main())
+print("Starting asyncio.run(main())...")
+try:
+    asyncio.run(main())
+    print("asyncio.run(main()) finished.")
+except Exception as e:
+    print("FATAL ERROR in run:", e)
+    import traceback
+    traceback.print_exc()
+print("Exiting script.")
