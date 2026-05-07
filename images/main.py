@@ -1139,6 +1139,19 @@ def draw_orientation_prompt(screen, dt):
         scaled_btn = pygame.transform.smoothscale(btn_surf, (sw, sh))
         screen.blit(scaled_btn, (btn_cx - sw // 2, btn_mid_y - sh // 2))
 
+    # --- TEST BUTTON ---
+    test_btn_rect = pygame.Rect(cx - 110, HEIGHT - 55, 220, 40)
+    draw_crafted_button(screen, test_btn_rect, "TEST CLICK", msg_font, (100, 196, 248))
+    
+    try:
+        mouse_pressed = pygame.mouse.get_pressed()
+        if mouse_pressed[0] or mouse_pressed[1] or mouse_pressed[2]:
+            mx, my = pygame.mouse.get_pos()
+            if test_btn_rect.collidepoint(mx, my):
+                return True
+    except Exception:
+        pass
+
     return False
 
 
