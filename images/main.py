@@ -1084,7 +1084,8 @@ def draw_orientation_prompt(screen, dt):
     WORD_DELAY  = 0.20
     WORD_SWELL  = 0.22
     words       = [w for w in SUBTITLE.split(" ") if w]
-
+    # words       = SUBTITLE.split(" ")
+    
     title_finish = WRITE_DURATION + 0.32   # brief pause after flourish
     sub_elapsed  = elapsed - title_finish
 
