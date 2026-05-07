@@ -3396,12 +3396,10 @@ async def _main():
                 if event.type == pygame.FINGERDOWN:
                     mx, my = int(event.x * WIDTH), int(event.y * HEIGHT)
                 else:
-                    mx, my = pygame.mouse.get_pos()
+                    mx, my = event.pos
                 if game_state == GameState.ORIENTATION_PROMPT:
-                    btn_rect = pygame.Rect(WIDTH//2 - 110, HEIGHT - 103 - 27, 220, 54)
-                    if btn_rect.collidepoint(mx, my):
-                        _prompt_start = None
-                        game_state = GameState.MENU
+                    _prompt_start = None
+                    game_state = GameState.MENU
                 elif game_state == GameState.MENU:
                     for i, btn_rect in enumerate(_menu_button_rects()):
                         if btn_rect.collidepoint(mx, my):
