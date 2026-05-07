@@ -1139,19 +1139,6 @@ def draw_orientation_prompt(screen, dt):
         scaled_btn = pygame.transform.smoothscale(btn_surf, (sw, sh))
         screen.blit(scaled_btn, (btn_cx - sw // 2, btn_mid_y - sh // 2))
 
-    # --- TEST BUTTON ---
-    test_btn_rect = pygame.Rect(cx - 110, HEIGHT - 55, 220, 40)
-    draw_crafted_button(screen, test_btn_rect, "TEST CLICK", msg_font, (100, 196, 248))
-    
-    try:
-        mouse_pressed = pygame.mouse.get_pressed()
-        if mouse_pressed[0] or mouse_pressed[1] or mouse_pressed[2]:
-            mx, my = pygame.mouse.get_pos()
-            if test_btn_rect.collidepoint(mx, my):
-                return True
-    except Exception:
-        pass
-
     return False
 
 
@@ -3015,26 +3002,6 @@ async def _main():
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     clock = pygame.time.Clock()
 
-    if IS_WEB:
-        try:
-            style = js.document.createElement("style")
-            style.textContent = (
-                "body{margin:0;padding:0;background:#0a0520;"
-                "display:flex;justify-content:center;align-items:center;"
-                "width:100vw;height:100vh;overflow:hidden;}"
-                "canvas{display:block;width:100vw;height:100vh;"
-                "object-fit:contain;touch-action:none;}"
-            )
-            js.document.head.appendChild(style)
-            vm = js.document.querySelector("meta[name='viewport']")
-            if not vm:
-                vm = js.document.createElement("meta")
-                vm.name = "viewport"
-                vm.content = "width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"
-                js.document.head.appendChild(vm)
-        except Exception:
-            pass
-
     pdf_surface = None
     pdf_surface_height = 0
     if HAS_FITZ and os.path.exists(MENU_PDF):
@@ -3566,14 +3533,6 @@ async def _main():
                     scroll_y -= event.y * 30
                     content_h = sum(img.get_height() + 20 for img in menu_images) + 20
                     scroll_y = max(0, min(scroll_y, max(0, content_h - HEIGHT)))
-
-        try:
-            mx, my = pygame.mouse.get_pos()
-            pygame.draw.circle(screen, (255, 0, 0), (mx, my), 8)
-            dbg_surf = font_ui.render(debug_last_event, True, (255, 255, 255), (0, 0, 0))
-            screen.blit(dbg_surf, (10, 10))
-        except Exception:
-            pass
 
         pygame.display.flip()
         await asyncio.sleep(0)
