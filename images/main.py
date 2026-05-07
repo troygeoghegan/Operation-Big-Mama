@@ -1139,15 +1139,6 @@ def draw_orientation_prompt(screen, dt):
         scaled_btn = pygame.transform.smoothscale(btn_surf, (sw, sh))
         screen.blit(scaled_btn, (btn_cx - sw // 2, btn_mid_y - sh // 2))
 
-    for event in pygame.event.get(pygame.MOUSEBUTTONDOWN):
-        if btn_rect.collidepoint(event.pos):
-            _prompt_start = None
-            return True
-    for event in pygame.event.get(pygame.FINGERDOWN):
-        fx, fy = int(event.x * WIDTH), int(event.y * HEIGHT)
-        if btn_rect.collidepoint(fx, fy):
-            _prompt_start = None
-            return True
     return False
 
 
@@ -3242,7 +3233,8 @@ async def _main():
         # --- landscape interrupt: winking face whenever phone is sideways ---
         if IS_WEB:
             try:
-                _in_landscape = js.window.innerWidth > js.window.innerHeight
+                _is_mobile = "Mobi" in js.navigator.userAgent or "Android" in js.navigator.userAgent or "iPhone" in js.navigator.userAgent
+                _in_landscape = _is_mobile and (js.window.innerWidth > js.window.innerHeight)
             except Exception:
                 _in_landscape = False
             if _in_landscape and game_state != GameState.LANDSCAPE_READY:
@@ -3402,7 +3394,13 @@ async def _main():
                     pdf_scroll_y = max(0, pdf_scroll_y - 80)
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = pygame.mouse.get_pos()
-                if game_state == GameState.MENU:
+                if game_state == GameState.ORIENTATION_PROMPT:
+                    btn_rect = pygame.Rect(WIDTH//2 - 110, HEIGHT - 103 - 27, 220, 54)
+                    if btn_rect.collidepoint(mx, my):
+                        global _prompt_start
+                        _prompt_start = None
+                        game_state = GameState.MENU
+                elif game_state == GameState.MENU:
                     for i, btn_rect in enumerate(_menu_button_rects()):
                         if btn_rect.collidepoint(mx, my):
                             selected_idx = i
