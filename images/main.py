@@ -3392,7 +3392,7 @@ async def _main():
                     pdf_scroll_y = min(max(0, pdf_surface_height - HEIGHT), pdf_scroll_y + 80)
                 elif event.key in (pygame.K_UP, pygame.K_LEFT):
                     pdf_scroll_y = max(0, pdf_scroll_y - 80)
-            if event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.FINGERDOWN):
+            if event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
                 if event.type == pygame.FINGERDOWN:
                     mx, my = int(event.x * WIDTH), int(event.y * HEIGHT)
                 else:
@@ -3400,7 +3400,6 @@ async def _main():
                 if game_state == GameState.ORIENTATION_PROMPT:
                     btn_rect = pygame.Rect(WIDTH//2 - 110, HEIGHT - 103 - 27, 220, 54)
                     if btn_rect.collidepoint(mx, my):
-                        global _prompt_start
                         _prompt_start = None
                         game_state = GameState.MENU
                 elif game_state == GameState.MENU:
