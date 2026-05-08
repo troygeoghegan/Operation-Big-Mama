@@ -844,26 +844,29 @@ async def show_online_menu():
     except Exception as e:
         print("menu error:", e)
 
-async def play_video(filepath, max_duration=None):
+async def play_video(filepath, max_duration=None, start_offset=0.0):
     """Play a video. Returns 'ended' (natural end / max_duration reached),
-    'skipped' (Skip pressed), or 'menu' (Menu pressed)."""
+    'skipped' (Skip pressed), or 'menu' (Menu pressed).
+    start_offset (seconds) skips into the video before playback begins."""
     if not HAS_VIDEO_LIB: return "ended"
     result = "ended"
     try:
         cap = cv2.VideoCapture(filepath)
         if not cap.isOpened(): return "ended"
 
+        if start_offset > 0:
+            cap.set(cv2.CAP_PROP_POS_MSEC, start_offset * 1000.0)
+
         audio_path = os.path.splitext(filepath)[0] + ".mp3"
         if os.path.exists(audio_path):
             pygame.mixer.music.load(audio_path)
-            pygame.mixer.music.play()
+            pygame.mixer.music.play(start=start_offset)
 
         vid_clock = pygame.time.Clock()
         fps = cap.get(cv2.CAP_PROP_FPS) or 30
 
         start_time = time.time()
-        skip_rect = pygame.Rect(WIDTH//2 + 10, HEIGHT - 60, 120, 44)
-        menu_rect = pygame.Rect(WIDTH//2 - 130, HEIGHT - 60, 120, 44)
+        skip_rect = pygame.Rect(WIDTH//2 - 75, HEIGHT - 60, 150, 44)
         last_surf = None
 
         while cap.isOpened():
@@ -883,9 +886,6 @@ async def play_video(filepath, max_duration=None):
                     result = "skipped"
                     break
                 elif event.type == pygame.MOUSEBUTTONDOWN:
-                    if menu_rect.collidepoint(event.pos):
-                        result = "menu"
-                        break
                     if skip_rect.collidepoint(event.pos):
                         result = "skipped"
                         break
@@ -915,7 +915,6 @@ async def play_video(filepath, max_duration=None):
                 screen.blit(fade_surf, (0, 0))
                 
             if elapsed > 1.0:
-                draw_crafted_button(screen, menu_rect, "Menu", font_ui, COLOR_SAGE)
                 draw_crafted_button(screen, skip_rect, "Skip", font_ui, COLOR_BLUSH)
                 
             pygame.display.flip()
@@ -958,6 +957,8 @@ nodo_image = None
 nodo_video_path = None
 
 massage_video_path = None
+
+kidsqs_video_path = None
 
 landscape_ready_start = 0.0
 
@@ -3005,7 +3006,7 @@ async def main():
 
 async def _main():
     global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape, trivia_question_start, secret_button_appear_time, secret_unlocked_seen, hint_popup_start, hint_click_count, puzzle_preview_start, puzzle_full_image, puzzle_move_count, hint_button_reveal_time, puzzle_auto_solve_used, puzzle_awaiting_start
-    global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui, font_huge
+    global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, kidsqs_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui, font_huge
 
     pygame.display.init()
     pygame.font.init()
@@ -3128,16 +3129,23 @@ async def _main():
 
     nodo_video_path = None
     try:
-        root_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "SpaceSwarm")
-        video_dir = os.path.join(root_path, "Video")
-        if not os.path.exists(video_dir):
-            video_dir = os.path.join(root_path, "video")
-        if os.path.exists(video_dir):
-            for fname in ["NODO.mp4", "nodo.mp4", "NODO.mov", "nodo.mov"]:
-                fpath = os.path.join(video_dir, fname)
-                if os.path.exists(fpath):
-                    nodo_video_path = fpath
-                    break
+        _img_dir = os.path.dirname(os.path.abspath(__file__))
+        for fname in ["NODO.mp4", "nodo.mp4", "NODO.mov", "nodo.mov"]:
+            fpath = os.path.join(_img_dir, fname)
+            if os.path.exists(fpath):
+                nodo_video_path = fpath
+                break
+        if nodo_video_path is None:
+            root_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "SpaceSwarm")
+            video_dir = os.path.join(root_path, "Video")
+            if not os.path.exists(video_dir):
+                video_dir = os.path.join(root_path, "video")
+            if os.path.exists(video_dir):
+                for fname in ["NODO.mp4", "nodo.mp4", "NODO.mov", "nodo.mov"]:
+                    fpath = os.path.join(video_dir, fname)
+                    if os.path.exists(fpath):
+                        nodo_video_path = fpath
+                        break
     except Exception: pass
 
     massage_video_path = None
@@ -3153,6 +3161,16 @@ async def _main():
                 if os.path.exists(os.path.join(_vdir, fname)):
                     massage_video_path = os.path.join(_vdir, fname)
                     break
+    except Exception: pass
+
+    kidsqs_video_path = None
+    try:
+        _img_dir = os.path.dirname(os.path.abspath(__file__))
+        for fname in ["KidsQs.MOV", "KidsQs.mov", "KidsQs.mp4", "kidsqs.mov", "kidsqs.mp4"]:
+            fpath = os.path.join(_img_dir, fname)
+            if os.path.exists(fpath):
+                kidsqs_video_path = fpath
+                break
     except Exception: pass
 
     _curr_dir  = os.path.dirname(os.path.abspath(__file__))
@@ -3334,7 +3352,7 @@ async def _main():
 
         elif game_state == GameState.PLAY_VIDEO_REWARD:
             if IS_WEB:
-                await play_video_web("https://troygeoghegan.github.io/Operation-Big-Mama/nodo.mp4")
+                await play_video_web("https://troygeoghegan.github.io/Operation-Big-Mama/nodo.mp4#t=10")
                 game_state = GameState.WON
                 scroll_y = 0
                 win_animation_start_time = time.time()
@@ -3342,8 +3360,7 @@ async def _main():
                                   "size": random.uniform(1.0, 3.0), "speed": random.uniform(100, 200),
                                   "seed": random.random(), "color": random.choice([COLOR_SOFT_PINK, COLOR_ROSE_GOLD, COLOR_CREAM])} for _ in range(40)]
             else:
-                max_dur = 10.0 if selected_idx == 2 else None
-                result = await play_video(nodo_video_path, max_duration=max_dur)
+                result = await play_video(nodo_video_path, start_offset=10.0)
                 if result == "menu":
                     game_state = GameState.MENU
                 else:
@@ -3362,7 +3379,18 @@ async def _main():
             menu_button_rect, exit_button_rect, secret_gift_rect = draw_final_message(screen, dt, transition_particles)
 
         elif game_state == GameState.SECRET_REWARD:
-            menu_button_rect = draw_secret_reward(screen, dt, win_animation_start_time, win_particles)
+            if IS_WEB:
+                await play_video_web("https://troygeoghegan.github.io/Operation-Big-Mama/KidsQs.MOV")
+                game_state = GameState.MENU
+                selected_idx = None
+                menu_button_rect = None
+            elif kidsqs_video_path and HAS_VIDEO_LIB:
+                await play_video(kidsqs_video_path)
+                game_state = GameState.MENU
+                selected_idx = None
+                menu_button_rect = None
+            else:
+                menu_button_rect = draw_secret_reward(screen, dt, win_animation_start_time, win_particles)
 
         elif game_state == GameState.TRIVIA_CORRECT:
             if draw_trivia_correct(screen, dt, correct_anim_start, current_question_idx, correct_anim_pos, correct_anim_items):
