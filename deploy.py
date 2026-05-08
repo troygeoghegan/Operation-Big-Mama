@@ -72,6 +72,16 @@ def build_web():
         print("ERROR: pygbag finished but no build/web/index.html found.")
         print("       First run needs internet (pygbag fetches a CDN template).")
         sys.exit(1)
+    # Copy media that the HTML <video> element fetches by URL — these can't
+    # live inside pygbag's virtual FS since the <video> tag runs in the
+    # browser context and must read from the same origin.
+    images_dir = os.path.join(REPO_DIR, "images")
+    for fname in ("KidsQs.MOV", "KidsQs.mov", "KidsQs.mp4"):
+        src = os.path.join(images_dir, fname)
+        if os.path.isfile(src):
+            shutil.copy2(src, os.path.join(out, fname))
+            print(f"  copied {fname} into web bundle")
+            break
     print(f"Built: {out}\n")
     return out
 

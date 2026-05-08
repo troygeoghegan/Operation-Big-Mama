@@ -3241,6 +3241,7 @@ async def _main():
     correct_anim_start = 0
     correct_anim_pos = (WIDTH // 2, HEIGHT // 2)
     correct_anim_items = []
+    _last_finger_time = 0.0  # for deduping mobile's FINGERDOWN + synthesized MOUSEBUTTONDOWN
     while running:
         dt = clock.tick(60) / 1000
 
@@ -3380,7 +3381,7 @@ async def _main():
 
         elif game_state == GameState.SECRET_REWARD:
             if IS_WEB:
-                await play_video_web("https://troygeoghegan.github.io/Operation-Big-Mama/KidsQs.MOV")
+                await play_video_web("KidsQs.MOV")
                 game_state = GameState.MENU
                 selected_idx = None
                 menu_button_rect = None
@@ -3425,7 +3426,12 @@ async def _main():
                     elif event.key in (pygame.K_UP, pygame.K_LEFT):
                         pdf_scroll_y = max(0, pdf_scroll_y - 80)
             if event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
+                # Mobile fires BOTH FINGERDOWN and a synthesized MOUSEBUTTONDOWN
+                # for one tap. Drop the mouse one if a finger event just landed.
+                if event.type == pygame.MOUSEBUTTONDOWN and time.time() - _last_finger_time < 0.5:
+                    continue
                 if event.type == pygame.FINGERDOWN:
+                    _last_finger_time = time.time()
                     mx, my = int(event.x * WIDTH), int(event.y * HEIGHT)
                 else:
                     mx, my = event.pos
