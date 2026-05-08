@@ -197,6 +197,15 @@ def wrap_text(text, font, max_width):
 
 SOUNDS = {}
 SOUND_NAMES = ("correct", "wrong", "flip", "match", "slide", "win")
+# Quiet incidental UI feedback (taps/slides), keep wins/celebrations full blast.
+SOUND_VOLUMES = {
+    "flip":    0.20,
+    "slide":   0.20,
+    "wrong":   0.35,
+    "match":   0.45,
+    "correct": 0.65,
+    "win":     1.00,
+}
 _last_won_anim_time = -1.0
 
 def _init_sounds():
@@ -212,7 +221,9 @@ def _init_sounds():
             path = os.path.join(snd_dir, name + ext)
             if os.path.exists(path):
                 try:
-                    SOUNDS[name] = pygame.mixer.Sound(path)
+                    snd = pygame.mixer.Sound(path)
+                    snd.set_volume(SOUND_VOLUMES.get(name, 1.0))
+                    SOUNDS[name] = snd
                 except Exception:
                     SOUNDS[name] = None
                 break
