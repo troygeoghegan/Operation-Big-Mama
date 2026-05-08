@@ -964,7 +964,7 @@ landscape_ready_start = 0.0
 
 options = [{"text": "Brunch", "limit": None, "pairs": 6, "type": "trivia"}, {"text": "Massage", "limit": 180, "type": "puzzle"}, {"text": "Dinner", "limit": 45, "pairs": 9, "type": "memory"}]
 selected_idx = None
-game_state = GameState.ORIENTATION_PROMPT if IS_WEB else GameState.MENU
+game_state = GameState.MENU
 completed_games = set()
 secret_button_appear_time = 0
 secret_unlocked_seen = False
