@@ -3444,13 +3444,10 @@ async def _main():
                 if event.type == pygame.FINGERDOWN:
                     _last_finger_time = time.time()
                     mx, my = int(event.x * WIDTH), int(event.y * HEIGHT)
-                    # For mobile: just record the press, don't execute action yet
                     _finger_pressed = True
                     _finger_pos = (mx, my)
-                    continue  # Skip action execution on FINGERDOWN
                 else:
                     mx, my = event.pos
-                # Desktop (MOUSEBUTTONDOWN only) - execute immediately
                 if game_state == GameState.ORIENTATION_PROMPT:
                     _prompt_start = None
                     game_state = GameState.MENU
@@ -3608,162 +3605,10 @@ async def _main():
                     content_h = sum(img.get_height() + 20 for img in menu_images) + 20
                     scroll_y = max(0, min(scroll_y, max(0, content_h - HEIGHT)))
             
-            if event.type == pygame.FINGERUP:
-                # Mobile touch release - execute button actions if finger is in valid area
-                if not _finger_pressed:
-                    continue
-                mx, my = int(event.x * WIDTH), int(event.y * HEIGHT)
+            if event.type in (pygame.FINGERUP, pygame.MOUSEBUTTONUP):
+                # Action already fired on press; just clear the touch press state
+                # so draw_crafted_button stops showing buttons as held.
                 _finger_pressed = False
-                
-                if game_state == GameState.ORIENTATION_PROMPT:
-                    _prompt_start = None
-                    game_state = GameState.MENU
-                elif game_state == GameState.MENU:
-                    for i, btn_rect in enumerate(_menu_button_rects()):
-                        if btn_rect.collidepoint(mx, my):
-                            selected_idx = i
-                            if options[selected_idx].get("type") == "trivia":
-                                if pending_trivia_questions:
-                                    TRIVIA_QUESTIONS[:] = pending_trivia_questions
-                                game_state = GameState.PLAYING_TRIVIA
-                                current_question_idx = 0
-                                trivia_question_start = time.time()
-                            elif options[selected_idx].get("type") == "puzzle":
-                                init_sliding_puzzle()
-                                game_state = GameState.PLAYING_PUZZLE
-                                start_time = time.time()
-                                paused_time = 0
-                            else:
-                                cards, game_state, start_time, paused_time = create_board(game_images, options[selected_idx]["pairs"]), GameState.PLAYING, time.time(), 0
-                            break
-                elif game_state == GameState.PLAYING_TRIVIA:
-                    if pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38).collidepoint(mx, my):
-                        current_question_idx = len(TRIVIA_QUESTIONS)
-                        completed_games.add(selected_idx)
-                        game_state = GameState.TRANSITION_TO_REWARD
-                        transition_start_time = time.time()
-                        transition_particles = []
-                    else:
-                        q_data = TRIVIA_QUESTIONS[current_question_idx]
-                        _, start_y = get_trivia_layout()
-                        for i in range(4):
-                            opt_rect = pygame.Rect(WIDTH//2 - 185, start_y + i*82, 370, 66)
-                            if opt_rect.collidepoint(mx, my):
-                                if i == q_data["answer"]:
-                                    correct_anim_start = time.time()
-                                    correct_anim_pos = opt_rect.center
-                                    correct_anim_items = [random.randint(0, 2) for _ in range(3)]
-                                    game_state = GameState.TRIVIA_CORRECT
-                                    play_sound("correct")
-                                else:
-                                    game_state = GameState.TRIVIA_FAIL_FADE
-                                    transition_start_time = time.time()
-                                    trigger_vibration()
-                                    play_sound("wrong")
-                                break
-                elif game_state == GameState.PLAYING_PUZZLE and puzzle_awaiting_start:
-                    if _lets_play_rect().collidepoint(mx, my):
-                        puzzle_awaiting_start = False
-                        puzzle_preview_start = time.time()
-                        start_time = time.time() + PUZZLE_PREVIEW_DISSOLVE
-                        paused_time = 0
-                elif game_state == GameState.PLAYING_PUZZLE and not _puzzle_preview_active():
-                    popup_up = hint_popup_start is not None
-                    if popup_up and time.time() - hint_popup_start >= HINT_POPUP_DUR and _hint_dismiss_rect().collidepoint(mx, my):
-                        if hint_click_count >= len(HINT_MESSAGES) and not puzzle_auto_solve_used:
-                            for i in range(12):
-                                puzzle_tiles[i] = i + 1
-                            puzzle_tiles[12] = 0
-                            puzzle_tiles[13] = 13
-                            puzzle_tiles[14] = 14
-                            puzzle_tiles[15] = 15
-                            puzzle_anim.clear()
-                            puzzle_auto_solve_used = True
-                        hint_popup_start = None
-                    elif pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38).collidepoint(mx, my):
-                        for i in range(15):
-                            puzzle_tiles[i] = i + 1
-                        puzzle_tiles[15] = 0
-                        puzzle_anim.clear()
-                        completed_games.add(selected_idx)
-                        game_state = GameState.TRANSITION_TO_REWARD
-                        transition_start_time = time.time()
-                        transition_particles = []
-                    elif not popup_up and _hint_button_visible() and _hint_button_rect().collidepoint(mx, my):
-                        hint_popup_start = time.time()
-                        hint_click_count += 1
-                    else:
-                        for i in range(16):
-                            if _puzzle_tile_rect(i).collidepoint(mx, my):
-                                if _puzzle_try_move(i):
-                                    puzzle_move_count += 1
-                                    play_sound("slide")
-                                    if puzzle_move_count == HINT_BUTTON_REVEAL_MOVES and hint_button_reveal_time is None:
-                                        hint_button_reveal_time = time.time()
-                                break
-                elif game_state == GameState.PLAYING and wait_timer <= 0:
-                    if pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38).collidepoint(mx, my):
-                        for c in cards: c["matched"] = True
-                        completed_games.add(selected_idx)
-                        game_state = GameState.TRANSITION_TO_REWARD
-                        transition_start_time = time.time()
-                        transition_particles = []
-                    else:
-                        for card in cards:
-                            if card["rect"].collidepoint(mx, my) and not card["flipped"] and not card["matched"]:
-                                card["flipped"] = True
-                                play_sound("flip")
-                                if not first: first = card
-                                elif not second: second, wait_timer = card, 0.7
-                                break
-                elif game_state == GameState.SECRET_REWARD:
-                    if menu_button_rect and menu_button_rect.collidepoint(mx, my):
-                        game_state = GameState.MENU
-                        selected_idx = None
-                        menu_button_rect = None
-                elif game_state == GameState.PDF_VIEWER:
-                    if pdf_close_rect and pdf_close_rect.collidepoint(mx, my):
-                        game_state = GameState.MENU
-                        selected_idx = None
-                elif game_state in [GameState.WON, GameState.GAMEOVER, GameState.FINAL_MESSAGE]:
-                    if game_state == GameState.WON and time.time() - win_animation_start_time < 0.5:
-                        pass
-                    elif menu_button_rect and menu_button_rect.collidepoint(mx, my):
-                        if game_state == GameState.WON and len(completed_games) == len(options):
-                            game_state = GameState.FINAL_MESSAGE
-                            transition_start_time = time.time()
-                            transition_particles = []
-                        else:
-                            game_state = GameState.MENU
-                            selected_idx = None
-                        menu_button_rect = None
-                        save_button_rect = None
-                    elif game_state == GameState.FINAL_MESSAGE and secret_gift_rect and secret_gift_rect.collidepoint(mx, my):
-                        game_state = GameState.SECRET_REWARD
-                        win_animation_start_time = time.time()
-                        win_particles = [{"x": random.randint(0, WIDTH), "y": random.randint(0, HEIGHT),
-                                          "size": random.uniform(1.5, 4.0), "speed": random.uniform(80, 180),
-                                          "seed": random.random(), "color": random.choice([COLOR_YELLOW, COLOR_BLUSH, COLOR_CREAM])} for _ in range(60)]
-                        menu_button_rect = None
-                        secret_gift_rect = None
-                    elif game_state == GameState.GAMEOVER and save_button_rect and save_button_rect.collidepoint(mx, my):
-                        if options[selected_idx].get("type") == "trivia":
-                            if pending_trivia_questions:
-                                TRIVIA_QUESTIONS[:] = pending_trivia_questions
-                            game_state = GameState.PLAYING_TRIVIA
-                            current_question_idx = 0
-                            trivia_question_start = time.time()
-                        elif options[selected_idx].get("type") == "puzzle":
-                            init_sliding_puzzle()
-                            game_state = GameState.PLAYING_PUZZLE
-                            start_time = time.time()
-                            paused_time = 0
-                        else:
-                            cards, game_state, start_time, paused_time = create_board(game_images, options[selected_idx]["pairs"]), GameState.PLAYING, time.time(), 0
-                        menu_button_rect = None
-                        save_button_rect = None
-                    elif game_state == GameState.FINAL_MESSAGE and exit_button_rect and exit_button_rect.collidepoint(mx, my):
-                        running = False
 
         pygame.display.flip()
         await asyncio.sleep(0)
