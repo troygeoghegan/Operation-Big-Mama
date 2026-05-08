@@ -959,6 +959,8 @@ nodo_video_path = None
 
 massage_video_path = None
 
+kidsqs_video_path = None
+
 landscape_ready_start = 0.0
 
 options = [{"text": "Brunch", "limit": None, "pairs": 6, "type": "trivia"}, {"text": "Massage", "limit": 180, "type": "puzzle"}, {"text": "Dinner", "limit": 45, "pairs": 9, "type": "memory"}]
@@ -973,6 +975,7 @@ puzzle_tile_images = []
 puzzle_anim = {}
 puzzle_full_image = None
 puzzle_preview_start = None
+puzzle_awaiting_start = False
 puzzle_move_count = 0
 hint_button_reveal_time = None
 hint_popup_start = None
@@ -2010,12 +2013,13 @@ def init_sliding_puzzle():
     """4×4 sliding-tile puzzle. Solved = tiles 1-15 in order with the blank at position 15."""
     global puzzle_tiles, puzzle_tile_images, puzzle_anim, hint_popup_start, hint_click_count
     global puzzle_full_image, puzzle_preview_start, puzzle_move_count, hint_button_reveal_time
-    global puzzle_auto_solve_used
+    global puzzle_auto_solve_used, puzzle_awaiting_start
     global PUZZLE_TILE_PX, PUZZLE_BOARD_PX, PUZZLE_BOARD_X, PUZZLE_BOARD_Y
     hint_popup_start = None
     hint_click_count = 0
     puzzle_full_image = None
     puzzle_preview_start = None
+    puzzle_awaiting_start = True
     puzzle_move_count = 0
     hint_button_reveal_time = None
     puzzle_auto_solve_used = False
@@ -2072,7 +2076,6 @@ def init_sliding_puzzle():
             square.blit(full, (0, 0), pygame.Rect(x0, y0, side, side))
             full = pygame.transform.smoothscale(square, (PUZZLE_BOARD_PX, PUZZLE_BOARD_PX))
             puzzle_full_image = full.copy()
-            puzzle_preview_start = time.time()
             for i in range(16):
                 r, c = divmod(i, 4)
                 slice_surf = pygame.Surface((PUZZLE_TILE_PX, PUZZLE_TILE_PX), pygame.SRCALPHA)
@@ -2155,8 +2158,20 @@ def _hint_button_visible():
 
 
 def _puzzle_preview_active():
+    if puzzle_awaiting_start:
+        return True
     return (puzzle_preview_start is not None
-            and time.time() - puzzle_preview_start < PUZZLE_PREVIEW_TOTAL)
+            and time.time() - puzzle_preview_start < PUZZLE_PREVIEW_DISSOLVE)
+
+
+LETS_PLAY_W = 280
+LETS_PLAY_H = 76
+
+
+def _lets_play_rect():
+    r = pygame.Rect(0, 0, LETS_PLAY_W, LETS_PLAY_H)
+    r.center = (WIDTH // 2, (PUZZLE_BOARD_Y + PUZZLE_BOARD_PX + HEIGHT) // 2)
+    return r
 
 HINT_MESSAGES = [
     ("Just kidding!",      "Figure it out"),
@@ -2298,15 +2313,18 @@ def draw_playing_puzzle(screen, dt, limit, elapsed_time):
         pygame.draw.rect(screen, COLOR_OUTLINE, inner, 3, border_radius=10)
 
     if _puzzle_preview_active() and puzzle_full_image is not None:
-        t = time.time() - puzzle_preview_start
-        if t < PUZZLE_PREVIEW_HOLD:
+        if puzzle_awaiting_start:
             alpha = 255
         else:
-            p = (t - PUZZLE_PREVIEW_HOLD) / PUZZLE_PREVIEW_DISSOLVE
+            p = (time.time() - puzzle_preview_start) / PUZZLE_PREVIEW_DISSOLVE
             alpha = int(255 * (1 - p))
         overlay = puzzle_full_image.copy()
         overlay.set_alpha(max(0, min(255, alpha)))
         screen.blit(overlay, (PUZZLE_BOARD_X, PUZZLE_BOARD_Y))
+
+    if puzzle_awaiting_start:
+        draw_crafted_button(screen, _lets_play_rect(), "Let's Play!", font_win, COLOR_YELLOW)
+        return
 
     auto_rect = pygame.Rect(WIDTH // 2 - 55, HEIGHT - GAME_BOTTOM + 5, 110, 38)
     draw_crafted_button(screen, auto_rect, "Auto Win", font_ui, COLOR_BLUSH)
@@ -2996,8 +3014,8 @@ async def main():
             await asyncio.sleep(1)
 
 async def _main():
-    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape, trivia_question_start, secret_button_appear_time, secret_unlocked_seen, hint_popup_start, hint_click_count, puzzle_preview_start, puzzle_full_image, puzzle_move_count, hint_button_reveal_time, puzzle_auto_solve_used
-    global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui, font_huge
+    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape, trivia_question_start, secret_button_appear_time, secret_unlocked_seen, hint_popup_start, hint_click_count, puzzle_preview_start, puzzle_full_image, puzzle_move_count, hint_button_reveal_time, puzzle_auto_solve_used, puzzle_awaiting_start
+    global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, kidsqs_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui, font_huge
 
     pygame.display.init()
     pygame.font.init()
@@ -3167,6 +3185,28 @@ async def _main():
                     break
     except Exception: pass
 
+    kidsqs_video_path = None
+    try:
+        _img_root = os.path.dirname(os.path.abspath(__file__))
+        _candidates = [
+            os.path.join(_img_root, "kids"),
+            os.path.join(os.getcwd(), "images", "kids"),
+            os.path.join(os.getcwd(), "kids"),
+        ]
+        for _kdir in _candidates:
+            if not os.path.isdir(_kdir):
+                continue
+            try:
+                for _f in os.listdir(_kdir):
+                    if _f.lower().startswith("kidsqs") and _f.lower().endswith((".mov", ".mp4", ".m4v")):
+                        kidsqs_video_path = os.path.join(_kdir, _f)
+                        break
+            except Exception:
+                pass
+            if kidsqs_video_path:
+                break
+    except Exception: pass
+
     _curr_dir  = os.path.dirname(os.path.abspath(__file__))
     _parent_dir = os.path.dirname(_curr_dir)
 
@@ -3267,11 +3307,14 @@ async def _main():
 
         elif game_state == GameState.PLAYING_PUZZLE:
             limit = options[selected_idx]["limit"]
-            elapsed = (time.time() - start_time) - paused_time
+            if puzzle_awaiting_start:
+                elapsed = 0
+            else:
+                elapsed = (time.time() - start_time) - paused_time
             draw_playing_puzzle(screen, dt, limit, elapsed)
-            if limit and (limit - elapsed) <= 0:
+            if not puzzle_awaiting_start and limit and (limit - elapsed) <= 0:
                 game_state = GameState.GAMEOVER
-            elif not puzzle_anim and _puzzle_solved():
+            elif not puzzle_awaiting_start and not puzzle_anim and _puzzle_solved():
                 completed_games.add(selected_idx)
                 game_state = GameState.TRANSITION_TO_REWARD
                 transition_start_time = time.time()
@@ -3370,7 +3413,18 @@ async def _main():
             menu_button_rect, exit_button_rect, secret_gift_rect = draw_final_message(screen, dt, transition_particles)
 
         elif game_state == GameState.SECRET_REWARD:
-            menu_button_rect = draw_secret_reward(screen, dt, win_animation_start_time, win_particles)
+            if IS_WEB:
+                await play_video_web("KidsQs.MOV")
+                game_state = GameState.MENU
+                selected_idx = None
+                menu_button_rect = None
+            elif kidsqs_video_path and HAS_VIDEO_LIB:
+                await play_video(kidsqs_video_path)
+                game_state = GameState.MENU
+                selected_idx = None
+                menu_button_rect = None
+            else:
+                menu_button_rect = draw_secret_reward(screen, dt, win_animation_start_time, win_particles)
 
         elif game_state == GameState.TRIVIA_CORRECT:
             if draw_trivia_correct(screen, dt, correct_anim_start, current_question_idx, correct_anim_pos, correct_anim_items):
@@ -3414,7 +3468,7 @@ async def _main():
                             elif options[selected_idx].get("type") == "puzzle":
                                 init_sliding_puzzle()
                                 game_state = GameState.PLAYING_PUZZLE
-                                start_time = time.time() + PUZZLE_PREVIEW_TOTAL
+                                start_time = time.time()
                                 paused_time = 0
                             else:
                                 cards, game_state, start_time, paused_time = create_board(game_images, options[selected_idx]["pairs"]), GameState.PLAYING, time.time(), 0
@@ -3442,6 +3496,12 @@ async def _main():
                                     transition_start_time = time.time()
                                     trigger_vibration()
                                     play_sound("wrong")
+                elif game_state == GameState.PLAYING_PUZZLE and puzzle_awaiting_start:
+                    if _lets_play_rect().collidepoint(mx, my):
+                        puzzle_awaiting_start = False
+                        puzzle_preview_start = time.time()
+                        start_time = time.time() + PUZZLE_PREVIEW_DISSOLVE
+                        paused_time = 0
                 elif game_state == GameState.PLAYING_PUZZLE and not _puzzle_preview_active():
                     popup_up = hint_popup_start is not None
                     if popup_up and time.time() - hint_popup_start >= HINT_POPUP_DUR and _hint_dismiss_rect().collidepoint(mx, my):

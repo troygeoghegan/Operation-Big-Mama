@@ -60,16 +60,19 @@
     <canvas id="puzzleCanvas" width="500" height="500"></canvas>
 
     <div class="controls">
-        <button id="shuffleBtn">Shuffle Tiles</button>
+        <button id="startBtn">Let's Play!</button>
+        <button id="shuffleBtn" disabled>Shuffle Tiles</button>
     </div>
 
     <script>
         const canvas = document.getElementById('puzzleCanvas');
         const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
         const shuffleBtn = document.getElementById('shuffleBtn');
 
         // Grid setup
         const GRID_SIZE = 5;
+        let started = false;
         let tileWidth, tileHeight;
         let tiles = [];
         let emptyTile = { r: GRID_SIZE - 1, c: GRID_SIZE - 1 };
@@ -109,6 +112,19 @@
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (!started) {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 28px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText("Hold on the image first", canvas.width / 2, canvas.height / 2 - 20);
+                ctx.font = '20px sans-serif';
+                ctx.fillText("then press Let's Play!", canvas.width / 2, canvas.height / 2 + 25);
+                return;
+            }
 
             for (let r = 0; r < GRID_SIZE; r++) {
                 for (let c = 0; c < GRID_SIZE; c++) {
@@ -202,7 +218,7 @@
 
         // Pointerdown effectively supports both desktop clicks and mobile touchscreen taps
         canvas.addEventListener('pointerdown', (e) => {
-            if (isSolved) return;
+            if (!started || isSolved) return;
 
             // Scale mouse coordinates accurately based on canvas CSS size
             const rect = canvas.getBoundingClientRect();
@@ -239,6 +255,14 @@
                     draw();
                 }
             }
+        });
+
+        startBtn.addEventListener('click', () => {
+            if (started) return;
+            started = true;
+            startBtn.style.display = 'none';
+            shuffleBtn.disabled = false;
+            shuffle();
         });
 
         shuffleBtn.addEventListener('click', shuffle);
