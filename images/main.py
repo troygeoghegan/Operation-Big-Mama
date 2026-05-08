@@ -959,8 +959,6 @@ nodo_video_path = None
 
 massage_video_path = None
 
-kidsqs_video_path = None
-
 landscape_ready_start = 0.0
 
 options = [{"text": "Brunch", "limit": None, "pairs": 6, "type": "trivia"}, {"text": "Massage", "limit": 180, "type": "puzzle"}, {"text": "Dinner", "limit": 45, "pairs": 9, "type": "memory"}]
@@ -3007,7 +3005,7 @@ async def main():
 
 async def _main():
     global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape, trivia_question_start, secret_button_appear_time, secret_unlocked_seen, hint_popup_start, hint_click_count, puzzle_preview_start, puzzle_full_image, puzzle_move_count, hint_button_reveal_time, puzzle_auto_solve_used, puzzle_awaiting_start
-    global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, kidsqs_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui, font_huge
+    global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui, font_huge
 
     pygame.display.init()
     pygame.font.init()
@@ -3155,28 +3153,6 @@ async def _main():
                 if os.path.exists(os.path.join(_vdir, fname)):
                     massage_video_path = os.path.join(_vdir, fname)
                     break
-    except Exception: pass
-
-    kidsqs_video_path = None
-    try:
-        _img_root = os.path.dirname(os.path.abspath(__file__))
-        _candidates = [
-            os.path.join(_img_root, "kids"),
-            os.path.join(os.getcwd(), "images", "kids"),
-            os.path.join(os.getcwd(), "kids"),
-        ]
-        for _kdir in _candidates:
-            if not os.path.isdir(_kdir):
-                continue
-            try:
-                for _f in os.listdir(_kdir):
-                    if _f.lower().startswith("kidsqs") and _f.lower().endswith((".mov", ".mp4", ".m4v")):
-                        kidsqs_video_path = os.path.join(_kdir, _f)
-                        break
-            except Exception:
-                pass
-            if kidsqs_video_path:
-                break
     except Exception: pass
 
     _curr_dir  = os.path.dirname(os.path.abspath(__file__))
@@ -3386,18 +3362,7 @@ async def _main():
             menu_button_rect, exit_button_rect, secret_gift_rect = draw_final_message(screen, dt, transition_particles)
 
         elif game_state == GameState.SECRET_REWARD:
-            if IS_WEB:
-                await play_video_web("KidsQs.MOV")
-                game_state = GameState.MENU
-                selected_idx = None
-                menu_button_rect = None
-            elif kidsqs_video_path and HAS_VIDEO_LIB:
-                await play_video(kidsqs_video_path)
-                game_state = GameState.MENU
-                selected_idx = None
-                menu_button_rect = None
-            else:
-                menu_button_rect = draw_secret_reward(screen, dt, win_animation_start_time, win_particles)
+            menu_button_rect = draw_secret_reward(screen, dt, win_animation_start_time, win_particles)
 
         elif game_state == GameState.TRIVIA_CORRECT:
             if draw_trivia_correct(screen, dt, correct_anim_start, current_question_idx, correct_anim_pos, correct_anim_items):
@@ -3431,8 +3396,8 @@ async def _main():
                         pdf_scroll_y = min(max(0, pdf_surface_height - HEIGHT), pdf_scroll_y + 80)
                     elif event.key in (pygame.K_UP, pygame.K_LEFT):
                         pdf_scroll_y = max(0, pdf_scroll_y - 80)
-            if event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.FINGERDOWN, pygame.FINGERUP):
-                if event.type in (pygame.FINGERDOWN, pygame.FINGERUP):
+            if event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
+                if event.type == pygame.FINGERDOWN:
                     mx, my = int(event.x * WIDTH), int(event.y * HEIGHT)
                 else:
                     mx, my = event.pos
