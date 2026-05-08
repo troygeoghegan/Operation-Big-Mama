@@ -86,8 +86,8 @@ TRIVIA_QUESTIONS = [
         "answer": 1
     },
     {
-        "question": "What are River and McKenna's favourite colours combined?",
-        "options": ["Peach", "Coral", "Light Orange", "Apricot"],
+        "question": "What is Alexa's favorite colour?",
+        "options": ["Orange", "Yellow", "Purple", "White"],
         "answer": 0
     },
     {
@@ -3378,15 +3378,12 @@ async def _main():
                         pdf_scroll_y = min(max(0, pdf_surface_height - HEIGHT), pdf_scroll_y + 80)
                     elif event.key in (pygame.K_UP, pygame.K_LEFT):
                         pdf_scroll_y = max(0, pdf_scroll_y - 80)
-            if event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.FINGERDOWN, pygame.FINGERUP):
-                if event.type in (pygame.FINGERDOWN, pygame.FINGERUP):
-                    mx, my = int(event.x * WIDTH), int(event.y * HEIGHT)
-                else:
-                    mx, my = event.pos
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mx, my = event.pos
                 if game_state == GameState.ORIENTATION_PROMPT:
                     _prompt_start = None
                     game_state = GameState.MENU
-                elif game_state == GameState.MENU and event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
+                elif game_state == GameState.MENU:
                     for i, btn_rect in enumerate(_menu_button_rects()):
                         if btn_rect.collidepoint(mx, my):
                             selected_idx = i
