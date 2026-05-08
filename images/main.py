@@ -1087,7 +1087,8 @@ def draw_orientation_prompt(screen, dt):
     WORD_DELAY  = 0.20
     WORD_SWELL  = 0.22
     words       = [w for w in SUBTITLE.split(" ") if w]
-
+    # words       = SUBTITLE.split(" ")
+    
     title_finish = WRITE_DURATION + 0.32   # brief pause after flourish
     sub_elapsed  = elapsed - title_finish
 
@@ -1141,15 +1142,6 @@ def draw_orientation_prompt(screen, dt):
         scaled_btn = pygame.transform.smoothscale(btn_surf, (sw, sh))
         screen.blit(scaled_btn, (btn_cx - sw // 2, btn_mid_y - sh // 2))
 
-    for event in pygame.event.get(pygame.MOUSEBUTTONDOWN):
-        if btn_rect.collidepoint(event.pos):
-            _prompt_start = None
-            return True
-    for event in pygame.event.get(pygame.FINGERDOWN):
-        fx, fy = int(event.x * WIDTH), int(event.y * HEIGHT)
-        if btn_rect.collidepoint(fx, fy):
-            _prompt_start = None
-            return True
     return False
 
 
@@ -3027,26 +3019,6 @@ async def _main():
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     clock = pygame.time.Clock()
 
-    if IS_WEB:
-        try:
-            style = js.document.createElement("style")
-            style.textContent = (
-                "body{margin:0;padding:0;background:#0a0520;"
-                "display:flex;justify-content:center;align-items:center;"
-                "width:100vw;height:100vh;overflow:hidden;}"
-                "canvas{display:block;width:100vw;height:100vh;"
-                "object-fit:contain;touch-action:none;}"
-            )
-            js.document.head.appendChild(style)
-            vm = js.document.querySelector("meta[name='viewport']")
-            if not vm:
-                vm = js.document.createElement("meta")
-                vm.name = "viewport"
-                vm.content = "width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"
-                js.document.head.appendChild(vm)
-        except Exception:
-            pass
-
     pdf_surface = None
     pdf_surface_height = 0
     if HAS_FITZ and os.path.exists(MENU_PDF):
@@ -3281,7 +3253,8 @@ async def _main():
         # --- landscape interrupt: winking face whenever phone is sideways ---
         if IS_WEB:
             try:
-                _in_landscape = js.window.innerWidth > js.window.innerHeight
+                _is_mobile = "Mobi" in js.navigator.userAgent or "Android" in js.navigator.userAgent or "iPhone" in js.navigator.userAgent
+                _in_landscape = _is_mobile and (js.window.innerWidth > js.window.innerHeight)
             except Exception:
                 _in_landscape = False
             if _in_landscape and game_state != GameState.LANDSCAPE_READY:
@@ -3446,16 +3419,27 @@ async def _main():
             menu_button_rect, save_button_rect = draw_won_gameover(screen, dt, game_state, selected_idx, win_animation_start_time, win_particles, scroll_y, menu_images)
 
         for event in pygame.event.get():
+            debug_last_event = str(event)
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == pygame.KEYDOWN and game_state == GameState.PDF_VIEWER:
-                if event.key in (pygame.K_DOWN, pygame.K_RIGHT):
-                    pdf_scroll_y = min(max(0, pdf_surface_height - HEIGHT), pdf_scroll_y + 80)
-                elif event.key in (pygame.K_UP, pygame.K_LEFT):
-                    pdf_scroll_y = max(0, pdf_scroll_y - 80)
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                mx, my = pygame.mouse.get_pos()
-                if game_state == GameState.MENU:
+            if event.type == pygame.KEYDOWN:
+                if game_state == GameState.ORIENTATION_PROMPT:
+                    _prompt_start = None
+                    game_state = GameState.MENU
+                elif game_state == GameState.PDF_VIEWER:
+                    if event.key in (pygame.K_DOWN, pygame.K_RIGHT):
+                        pdf_scroll_y = min(max(0, pdf_surface_height - HEIGHT), pdf_scroll_y + 80)
+                    elif event.key in (pygame.K_UP, pygame.K_LEFT):
+                        pdf_scroll_y = max(0, pdf_scroll_y - 80)
+            if event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.FINGERDOWN, pygame.FINGERUP):
+                if event.type in (pygame.FINGERDOWN, pygame.FINGERUP):
+                    mx, my = int(event.x * WIDTH), int(event.y * HEIGHT)
+                else:
+                    mx, my = event.pos
+                if game_state == GameState.ORIENTATION_PROMPT:
+                    _prompt_start = None
+                    game_state = GameState.MENU
+                elif game_state == GameState.MENU and event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
                     for i, btn_rect in enumerate(_menu_button_rects()):
                         if btn_rect.collidepoint(mx, my):
                             selected_idx = i
