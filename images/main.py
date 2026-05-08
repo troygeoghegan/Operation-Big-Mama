@@ -7,15 +7,6 @@ import asyncio
 from enum import Enum, auto
 import json
 import threading
-import io
-
-try:
-    import fitz  # pymupdf
-    HAS_FITZ = True
-except ImportError:
-    HAS_FITZ = False
-
-MENU_PDF = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "SpaceSwarm", "Images", "Menu", "Menu.pdf")
 
 try:
     from plyer import vibrator
@@ -30,7 +21,6 @@ except ImportError:
     HAS_JS = False
 
 IS_WEB = HAS_JS
-DEBUG_MODE = os.environ.get("MAMA_DEBUG", "0") == "1"
 
 def trigger_vibration():
     if HAS_VIBRATOR:
@@ -56,7 +46,6 @@ if not IS_WEB:
         pass
 
 class GameState(Enum):
-    ORIENTATION_PROMPT = auto()
     LANDSCAPE_READY = auto()
     MENU = auto()
     PLAYING = auto()
@@ -69,10 +58,10 @@ class GameState(Enum):
     NODO_REVEAL = auto()
     WON = auto()
     FINAL_MESSAGE = auto()
-    PDF_VIEWER = auto()
     TRIVIA_CORRECT = auto()
     TRIVIA_FAIL_FADE = auto()
     SECRET_REWARD = auto()
+    LOVE_NOTE = auto()
 
 TRIVIA_QUESTIONS = [
     {
@@ -102,20 +91,19 @@ TRIVIA_QUESTIONS = [
     }
 ]
 
-dynamic_trivia_loaded = False
 pending_trivia_questions = None
 
 def fetch_gemini_trivia():
-    global pending_trivia_questions, dynamic_trivia_loaded
-    
+    global pending_trivia_questions
+
     api_key = os.environ.get("GEMINI_API_KEY")
-    
+
     if not HAS_GEMINI or not api_key:
         return
 
     try:
         client = genai.Client(api_key=api_key)
-        
+
         prompt = """
         Generate 5 fun, heartwarming, and humorous multiple-choice trivia questions about moms, Mother's Day, and parenting.
         Respond ONLY with a valid JSON array of objects. Do not include markdown formatting or backticks.
@@ -127,18 +115,17 @@ def fetch_gemini_trivia():
         }
         Do NOT prefix options with letters like "A)" or "B)". The 'answer' should be the integer index (0-3) of the correct option.
         """
-        
+
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt
         )
-        
+
         raw_json = response.text.replace("```json", "").replace("```", "").strip()
-            
+
         new_questions = json.loads(raw_json)
         if len(new_questions) > 0:
             pending_trivia_questions = new_questions
-            dynamic_trivia_loaded = True
     except Exception as e:
         print(f"Failed to fetch dynamic trivia: {e}")
 
@@ -156,9 +143,6 @@ REWARDS = {
 WIDTH, HEIGHT = 412, 860
 screen = None
 clock = None
-
-pdf_surface = None
-pdf_surface_height = 0
 
 # Mobile touch tracking for button hover feedback
 _finger_pressed = False
@@ -312,8 +296,6 @@ def _draw_brunch_item(surf, item_type, cx, cy, scale, alpha):
         pygame.draw.polygon(temp_surf, COLOR_OUTLINE, bowl_pts, int(2 * s))
         temp_surf.set_alpha(alpha)
         surf.blit(temp_surf, (cx - 20 * s, cy - 40 * s))
-
-_btn_text_cache = {}
 
 def draw_crafted_button(screen, rect, text, font, base_color, text_outline_color=None):
     # Get mouse position - on mobile this may be synthesized from touch
@@ -818,40 +800,6 @@ async def play_video_web(url):
     except Exception as e:
         print("video error:", e)
 
-async def show_online_menu():
-    """Full-screen iframe of the restaurant website with a Back button overlay."""
-    if not IS_WEB:
-        return
-    try:
-        wrap = js.document.createElement("div")
-        wrap.setAttribute("data-done", "0")
-        wrap.style.cssText = ("position:fixed;top:0;left:0;width:100%;height:100%;"
-                              "z-index:9998;background:#fff;")
-
-        iframe = js.document.createElement("iframe")
-        iframe.src = "https://nodoleslieville.ca"
-        iframe.setAttribute("loading", "eager")
-        iframe.style.cssText = ("width:100vw;height:100vh;border:none;"
-                                "max-width:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;")
-        wrap.appendChild(iframe)
-
-        btn = js.document.createElement("button")
-        btn.textContent = "Back to Menu"
-        btn.style.cssText = ("position:fixed;top:12px;right:12px;z-index:10000;"
-                             "padding:10px 18px;background:rgb(235,196,196);"
-                             "color:rgb(94,80,80);border:none;border-radius:8px;"
-                             "font-size:15px;font-weight:bold;cursor:pointer;")
-        btn.setAttribute("onclick", "document.getElementById('_menu_wrap').setAttribute('data-done','1')")
-        wrap.id = "_menu_wrap"
-        wrap.appendChild(btn)
-
-        js.document.body.appendChild(wrap)
-        while wrap.getAttribute("data-done") != "1":
-            await asyncio.sleep(0.2)
-        js.document.body.removeChild(wrap)
-    except Exception as e:
-        print("menu error:", e)
-
 async def play_video(filepath, max_duration=None, start_offset=0.0):
     """Play a video. Returns 'ended' (natural end / max_duration reached),
     'skipped' (Skip pressed), or 'menu' (Menu pressed).
@@ -974,8 +922,6 @@ options = [{"text": "Brunch", "limit": None, "pairs": 6, "type": "trivia"}, {"te
 selected_idx = None
 game_state = GameState.MENU
 completed_games = set()
-secret_button_appear_time = 0
-secret_unlocked_seen = False
 cards, first, second, wait_timer = [], None, None, 0
 puzzle_tiles = []
 puzzle_tile_images = []
@@ -998,7 +944,6 @@ win_particles = []
 current_question_idx = 0
 trivia_question_start = 0
 prev_game_state_before_landscape = None
-_prompt_start = None
 _menu_enter_time = None
 _menu_prev_state = None
 
@@ -1006,195 +951,6 @@ font_title = None
 font_win = None
 font_ui = None
 font_huge = None    # extra-large Fredoka for MAMA hero word
-
-def draw_orientation_prompt(screen, dt):
-    """Portrait welcome screen. Returns True when 'Let's Go' is tapped."""
-    global _prompt_start
-    if _prompt_start is None:
-        _prompt_start = time.time()
-
-    crafted_bg.draw(screen, dt)
-    cx, cy = WIDTH // 2, HEIGHT // 2
-    t       = time.time()
-    elapsed = t - _prompt_start
-
-    # ── Rising hearts (behind text) ──────────────────────────────────────────
-    for i in range(7):
-        seed  = i * 1.3
-        speed = 30 + i * 8
-        cycle = (t * speed * 0.01 + seed) % 1.0
-        hx    = cx + math.sin(seed * 2.4 + t * 0.4) * (60 + i * 18)
-        hy    = HEIGHT - cycle * (HEIGHT + 80)
-        size  = 1.2 + math.sin(seed) * 0.6
-        alpha = int(180 * math.sin(cycle * math.pi))
-        color = [COLOR_BLUSH, COLOR_SAGE, COLOR_CARD_BACK][i % 3]
-        draw_vector_heart(screen, hx, hy, size, color, alpha)
-
-    msg_font  = font_ui if font_ui else pygame.font.SysFont(None, 28)
-    title_cy  = cy - 50
-    sub_cy    = cy + 30
-
-    # ── Continuous-stroke handwriting reveal: "Hey Mama!" ────────────────────
-    FULL_TITLE     = "Hey Mama!"
-    WRITE_DURATION = 1.7   # seconds to write the full title
-
-    title_surf  = font_title.render(FULL_TITLE, True, COLOR_CREAM)
-    shadow_surf = font_title.render(FULL_TITLE, True, COLOR_OUTLINE)
-    title_w, title_h = title_surf.get_size()
-
-    # Smooth eased progress + subtle rhythm wobble (slight decel at
-    # letter-lift points, faster across long strokes)
-    raw_p       = min(1.0, elapsed / WRITE_DURATION)
-    eased       = raw_p * raw_p * (3 - 2 * raw_p)          # smoothstep
-    rhythm      = 0.025 * math.sin(raw_p * 9 * math.pi)    # ~1 micro-pause per letter
-    reveal_frac = max(0.0, min(1.0, eased + rhythm))
-    reveal_px   = int(title_w * reveal_frac)
-    title_done  = raw_p >= 1.0
-
-    title_x = cx - title_w // 2
-    ty      = title_cy - title_h // 2
-
-    # Clip-reveal: expose pre-rendered text surface from left to right
-    screen.set_clip(pygame.Rect(title_x + 2, ty + 2, reveal_px, title_h))
-    screen.blit(shadow_surf, (title_x + 2, ty + 2))
-    screen.set_clip(pygame.Rect(title_x, ty, reveal_px, title_h))
-    screen.blit(title_surf,  (title_x, ty))
-    screen.set_clip(None)
-
-    # Pen nib — glowing ink dot leading the stroke
-    if not title_done and reveal_px > 0:
-        nib_x = title_x + reveal_px
-        nib_y = title_cy
-        nib   = pygame.Surface((22, 22), pygame.SRCALPHA)
-        pygame.draw.circle(nib, (*COLOR_BLUSH,   80),  (11, 11), 10)   # outer aura
-        pygame.draw.circle(nib, (*COLOR_BLUSH,  160),  (11, 11),  6)   # ink body
-        pygame.draw.circle(nib, (*COLOR_OUTLINE, 220), (11, 11),  3)   # nib tip
-        pygame.draw.circle(nib, (255, 255, 255,  180), ( 9,  9),  2)   # wet gloss
-        screen.blit(nib, (nib_x - 11, nib_y - 11))
-
-    # Flourish underline draws itself after title finishes
-    if title_done:
-        fl_age  = elapsed - WRITE_DURATION
-        fl_prog = min(1.0, fl_age / 0.38)
-        fl_len  = int(title_w * 0.70 * fl_prog)
-        fl_x    = cx - int(title_w * 0.70) // 2
-        fl_y    = ty + title_h - 3
-        if fl_len > 2:
-            fl_surf = pygame.Surface((fl_len, 3), pygame.SRCALPHA)
-            for px in range(fl_len):
-                fade = math.sin(px / fl_len * math.pi)
-                a    = int(85 * fade)
-                fl_surf.set_at((px, 0), (*COLOR_CREAM,  a))
-                fl_surf.set_at((px, 1), (*COLOR_BLUSH,  int(a * 0.75)))
-                fl_surf.set_at((px, 2), (*COLOR_CREAM,  int(a * 0.3)))
-            screen.blit(fl_surf, (fl_x, fl_y))
-
-    # ── Word swell: "a little something just for you 🌸" ─────────────────────
-    SUBTITLE    = "a little something just for you  \U0001f338"
-    WORD_DELAY  = 0.20
-    WORD_SWELL  = 0.22
-    words       = [w for w in SUBTITLE.split(" ") if w]
-    # words       = SUBTITLE.split(" ")
-    
-    title_finish = WRITE_DURATION + 0.32   # brief pause after flourish
-    sub_elapsed  = elapsed - title_finish
-
-    full_sub_w = msg_font.render(SUBTITLE, True, COLOR_CREAM).get_width()
-    draw_x     = cx - full_sub_w // 2
-    sub_y_top  = sub_cy - msg_font.get_height() // 2
-    cursor_x   = draw_x
-    space_w    = msg_font.render(" ", True, COLOR_CREAM).get_width()
-
-    for wi, word in enumerate(words):
-        age = sub_elapsed - wi * WORD_DELAY
-        if age < 0:
-            break
-        word_surf = msg_font.render(word, True, COLOR_CREAM)
-        ww, wh    = word_surf.get_size()
-        if age < WORD_SWELL:
-            p     = age / WORD_SWELL
-            scale = p * (2 - p) * (1 + 0.28 * math.sin(p * math.pi))
-            sw    = max(1, int(ww * scale))
-            sh_h  = max(1, int(wh * scale))
-            wx    = cursor_x + (ww - sw) // 2
-            wy    = sub_y_top + (wh - sh_h) // 2
-            sh_sc = pygame.transform.smoothscale(msg_font.render(word, True, COLOR_OUTLINE), (sw, sh_h))
-            sc    = pygame.transform.smoothscale(word_surf, (sw, sh_h))
-            screen.blit(sh_sc, (wx + 2, wy + 2))
-            screen.blit(sc,    (wx,     wy))
-        else:
-            sh_surf = msg_font.render(word, True, COLOR_OUTLINE)
-            screen.blit(sh_surf,  (cursor_x + 2, sub_y_top + 2))
-            screen.blit(word_surf, (cursor_x,     sub_y_top))
-        cursor_x += ww + space_w
-
-    # ── Button — bubble swell pop-in ─────────────────────────────────────────
-    last_word_done = title_finish + (len(words) - 1) * WORD_DELAY + WORD_SWELL
-    btn_w, btn_h   = 220, 54
-    btn_cx         = cx
-    btn_mid_y      = HEIGHT - 103
-
-    swell_t   = elapsed - last_word_done
-    p_btn     = min(1.0, max(0.0, swell_t / 0.45))
-    btn_scale = p_btn * (2 - p_btn) * (1 + 0.22 * math.sin(p_btn * math.pi)) if swell_t >= 0 else 0.0
-
-    btn_rect = pygame.Rect(btn_cx - btn_w // 2, btn_mid_y - btn_h // 2, btn_w, btn_h)
-
-    if btn_scale > 0.01:
-        sw = max(1, int(btn_w * btn_scale))
-        sh = max(1, int(btn_h * btn_scale))
-        btn_surf = pygame.Surface((btn_w, btn_h), pygame.SRCALPHA)
-        draw_crafted_button(btn_surf, pygame.Rect(0, 0, btn_w, btn_h),
-                            "Let's Go!", msg_font, COLOR_BLUSH)
-        scaled_btn = pygame.transform.smoothscale(btn_surf, (sw, sh))
-        screen.blit(scaled_btn, (btn_cx - sw // 2, btn_mid_y - sh // 2))
-
-    return False
-
-
-def draw_thumbs_up(surf, cx, cy, scale):
-    """Draw a thumbs-up icon centred at (cx, cy), scaled by `scale`."""
-    s = scale
-    bc = COLOR_BLUSH
-    dc = COLOR_CARD_BACK   # darker outline/detail
-    gc = COLOR_ROSE_GOLD   # highlight accent
-
-    # Fist body (rounded rectangle below thumb)
-    fist_w, fist_h = int(52*s), int(44*s)
-    fist_rect = pygame.Rect(cx - fist_w//2, cy - fist_h//4, fist_w, fist_h)
-    pygame.draw.rect(surf, bc,  fist_rect, border_radius=int(10*s))
-    pygame.draw.rect(surf, dc,  fist_rect, int(2*s), border_radius=int(10*s))
-
-    # Knuckle lines
-    for i in range(1, 4):
-        kx = fist_rect.left + int(fist_w * i / 4)
-        pygame.draw.line(surf, dc,
-                         (kx, fist_rect.top + int(4*s)),
-                         (kx, fist_rect.top + int(14*s)), max(1, int(1.5*s)))
-
-    # Thumb (polygon pointing upward-left)
-    tx, ty = cx - int(14*s), cy - int(8*s)
-    thumb = [
-        (tx,              ty),
-        (tx - int(18*s),  ty - int(38*s)),
-        (tx - int(8*s),   ty - int(52*s)),
-        (tx + int(10*s),  ty - int(42*s)),
-        (tx + int(16*s),  ty - int(18*s)),
-        (tx + int(16*s),  ty),
-    ]
-    pygame.draw.polygon(surf, bc, thumb)
-    pygame.draw.polygon(surf, dc, thumb, max(1, int(2*s)))
-
-    # Nail highlight
-    nail = [
-        (tx - int(12*s),  ty - int(38*s)),
-        (tx - int(4*s),   ty - int(50*s)),
-        (tx + int(8*s),   ty - int(42*s)),
-        (tx + int(4*s),   ty - int(32*s)),
-    ]
-    pygame.draw.polygon(surf, gc, nail)
-    pygame.draw.polygon(surf, dc, nail, max(1, int(1*s)))
-
 
 def draw_landscape_ready(screen, dt, elapsed):
     """Winking face shown when phone is rotated to landscape. Auto-dismissed on return to portrait."""
@@ -2824,23 +2580,205 @@ def draw_trivia_fail_fade(screen, dt, start_time, question_idx):
         
     return elapsed > 0.8
 
-def draw_pdf_viewer(screen, pdf_surf, surf_h, scroll_y):
-    screen.fill((20, 20, 20))
-    if pdf_surf:
-        screen.blit(pdf_surf, (0, -scroll_y))
+_love_note_start = None
+_love_note_confetti = []
+
+def _spawn_confetti(count):
+    """Spawn confetti pieces above the screen — squares, stars, hearts."""
+    palette = [COLOR_BLUSH, COLOR_YELLOW, COLOR_CREAM, (255, 160, 200), (100, 196, 248)]
+    pieces = []
+    for _ in range(count):
+        pieces.append({
+            "x": random.uniform(-20, WIDTH + 20),
+            "y": random.uniform(-120, -10),
+            "vx": random.uniform(-40, 40),
+            "vy": random.uniform(40, 130),
+            "rot": random.uniform(0, 360),
+            "rot_v": random.uniform(-360, 360),
+            "size": random.uniform(7, 13),
+            "color": random.choice(palette),
+            "shape": random.choice(("rect", "rect", "rect", "star", "heart")),
+        })
+    return pieces
+
+
+def _draw_confetti_piece(surf, p):
+    sz = p["size"]
+    if p["shape"] == "star":
+        _draw_star(surf, int(p["x"]), int(p["y"]), int(sz * 0.5), p["color"])
+    elif p["shape"] == "heart":
+        draw_vector_heart(surf, int(p["x"]), int(p["y"]), sz / 14.0, p["color"], 230)
     else:
-        msg = font_ui.render("Menu PDF could not be loaded.", True, (220, 220, 220))
-        screen.blit(msg, (WIDTH // 2 - msg.get_width() // 2, HEIGHT // 2))
+        rect_surf = pygame.Surface((int(sz), int(sz * 0.6)), pygame.SRCALPHA)
+        rect_surf.fill(p["color"])
+        rotated = pygame.transform.rotate(rect_surf, p["rot"])
+        surf.blit(rotated, rotated.get_rect(center=(int(p["x"]), int(p["y"]))))
 
-    if surf_h > HEIGHT:
-        bar_h = max(30, int(HEIGHT * HEIGHT / surf_h))
-        bar_y = int(scroll_y * (HEIGHT - bar_h) / max(1, surf_h - HEIGHT))
-        pygame.draw.rect(screen, (60, 60, 60), (WIDTH - 8, 0, 8, HEIGHT))
-        pygame.draw.rect(screen, (180, 180, 180), (WIDTH - 8, bar_y, 8, bar_h))
 
-    close_rect = pygame.Rect(WIDTH - 120, 10, 110, 36)
-    draw_crafted_button(screen, close_rect, "Close Menu", font_ui, COLOR_BLUSH)
-    return close_rect
+def _draw_outlined(surf, text, font, color, center, alpha=255, scale=1.0, ow=3):
+    """One-shot outlined text with optional scale + alpha. Used inside love-note
+    animation where each frame's scale/alpha differs (so we can't use the cache)."""
+    ts  = font.render(text, True, color)
+    os_ = font.render(text, True, COLOR_OUTLINE)
+    if scale != 1.0:
+        sw = max(1, int(ts.get_width() * scale))
+        sh = max(1, int(ts.get_height() * scale))
+        ts  = pygame.transform.smoothscale(ts,  (sw, sh))
+        os_ = pygame.transform.smoothscale(os_, (sw, sh))
+    tw, th = ts.get_size()
+    tmp = pygame.Surface((tw + ow*2, th + ow*2), pygame.SRCALPHA)
+    for ddx in (-ow, 0, ow):
+        for ddy in (-ow, 0, ow):
+            if ddx or ddy:
+                tmp.blit(os_, (ow + ddx, ow + ddy))
+    tmp.blit(ts, (ow, ow))
+    if alpha < 255:
+        tmp.set_alpha(alpha)
+    surf.blit(tmp, (center[0] - tw // 2 - ow, center[1] - th // 2 - ow))
+
+
+def draw_love_note(screen, dt):
+    """Celebration screen after the KidsQs reward video.
+    Confetti rain + letter pop-in title + pulsing heart + signed sign-off.
+    Returns the menu button rect once it has appeared, else None."""
+    global _love_note_start, _love_note_confetti
+    if _love_note_start is None:
+        _love_note_start = time.time()
+        _love_note_confetti = _spawn_confetti(80)
+
+    crafted_bg.draw(screen, dt)
+    elapsed = time.time() - _love_note_start
+    cx = WIDTH // 2
+    t = time.time()
+
+    # ── Confetti rain ──────────────────────────────────────────────────────
+    if len(_love_note_confetti) < 60:
+        _love_note_confetti.extend(_spawn_confetti(8))
+    surviving = []
+    for p in _love_note_confetti:
+        p["x"]  += p["vx"] * dt
+        p["y"]  += p["vy"] * dt
+        p["vy"] = min(p["vy"] + 110 * dt, 320)
+        p["rot"] += p["rot_v"] * dt
+        if p["y"] < HEIGHT + 30:
+            _draw_confetti_piece(screen, p)
+            surviving.append(p)
+    _love_note_confetti = surviving
+
+    def phase(start, dur):
+        return max(0.0, min(1.0, (elapsed - start) / dur))
+
+    # ── Title: each letter bounces in with overshoot, scaled to fit ───────
+    LETTER_DUR, LETTER_STAG = 0.35, 0.05
+    HAPPY_START = 0.05
+    MD_START    = 0.65
+    TITLE_MAX_W = WIDTH - 40
+
+    def _draw_word_pop(word, base_y, color, t_start):
+        letter_surfs  = [font_title.render(ch, True, color)         for ch in word]
+        outline_surfs = [font_title.render(ch, True, COLOR_OUTLINE) for ch in word]
+        total_w = sum(s.get_width() for s in letter_surfs)
+        fit = min(1.0, TITLE_MAX_W / total_w) if total_w > 0 else 1.0
+        eff_w = int(total_w * fit)
+        x = cx - eff_w // 2
+        ow = 3
+        for i, (ls, os_) in enumerate(zip(letter_surfs, outline_surfs)):
+            lp = max(0.0, min(1.0, (elapsed - t_start - i * LETTER_STAG) / LETTER_DUR))
+            adv = max(1, int(ls.get_width() * fit))
+            if lp <= 0:
+                x += adv
+                continue
+            scale = _ease_out_back(lp) * fit
+            alpha = min(255, int(lp * 2.5 * 255))
+            sw = max(1, int(ls.get_width()  * scale))
+            sh = max(1, int(ls.get_height() * scale))
+            ls_s = pygame.transform.smoothscale(ls,  (sw, sh))
+            os_s = pygame.transform.smoothscale(os_, (sw, sh))
+            bob  = int(math.sin(t * 2.6 + i * 0.9) * 4) if lp >= 1.0 else 0
+            tmp = pygame.Surface((sw + ow*2, sh + ow*2), pygame.SRCALPHA)
+            for ddx in (-ow, 0, ow):
+                for ddy in (-ow, 0, ow):
+                    if ddx or ddy:
+                        tmp.blit(os_s, (ow + ddx, ow + ddy))
+            tmp.blit(ls_s, (ow, ow))
+            tmp.set_alpha(alpha)
+            screen.blit(tmp, (x + adv // 2 - sw // 2 - ow,
+                              base_y - sh // 2 + bob - ow))
+            x += adv
+
+    _draw_word_pop("Happy",         120, COLOR_BLUSH,  HAPPY_START)
+    _draw_word_pop("Mother's Day!", 195, COLOR_YELLOW, MD_START)
+
+    # Sparkle stars flanking the title once it's settled
+    title_done_at = MD_START + LETTER_DUR + len("Mother's Day!") * LETTER_STAG
+    if elapsed > title_done_at:
+        for i, (sx, sy) in enumerate([(34, 120), (WIDTH - 34, 120),
+                                       (28, 195), (WIDTH - 28, 195)]):
+            pulse = 1.0 + 0.45 * math.sin(t * 3.2 + i * 1.4)
+            _draw_star(screen, sx, sy, int(8 * pulse), COLOR_YELLOW)
+
+    # ── Pulsing heart between title and body ──────────────────────────────
+    HEART_START = 1.4
+    hp = phase(HEART_START, 0.55)
+    if hp > 0:
+        scale = _ease_out_back(hp)
+        beat  = 1.0 + 0.14 * math.sin((elapsed - HEART_START) * 5.0)
+        size  = max(0.1, 2.4 * scale * beat)
+        alpha = min(255, int(hp * 2.0 * 255))
+        draw_vector_heart(screen, cx, 270, size, COLOR_BLUSH, alpha=alpha)
+
+    # ── Body message — wrapped to fit, slides up + fade ───────────────────
+    BODY_START = 1.9
+    body_text  = ("You give us your heart and endless love while playing "
+                  "with us every single day. So today, we send it back.")
+    body_lines = wrap_text(body_text, font_ui, WIDTH - 40)
+    body_line_h = font_ui.get_height() + 4
+    body_top = 330
+    bp = phase(BODY_START, 0.55)
+    if bp > 0:
+        slide = int((1 - _ease_out_cubic(bp)) * 30)
+        alpha = min(255, int(bp * 2.0 * 255))
+        for i, line in enumerate(body_lines):
+            _draw_outlined(screen, line, font_ui, COLOR_CREAM,
+                           (cx, body_top + i * body_line_h + slide),
+                           alpha=alpha)
+    body_bottom = body_top + len(body_lines) * body_line_h
+
+    # ── Signature — staggered slide-in per line ───────────────────────────
+    SIG_START = 2.5
+    sig_lines = [
+        ("Love,",            body_bottom + 30,  font_ui,  COLOR_CREAM, 0.00),
+        ("McKenna, River,",  body_bottom + 85,  font_win, COLOR_BLUSH, 0.18),
+        ("Dada & Bruce",     body_bottom + 135, font_win, COLOR_BLUSH, 0.36),
+    ]
+    for line, base_y, fnt, col, dly in sig_lines:
+        sp = phase(SIG_START + dly, 0.50)
+        if sp <= 0:
+            continue
+        slide = int((1 - _ease_out_back(sp)) * 60)
+        alpha = min(255, int(sp * 2.5 * 255))
+        _draw_outlined(screen, line, fnt, col, (cx, base_y + slide), alpha=alpha)
+
+    # ── Menu button — bubble pop after everything's settled ───────────────
+    BTN_START = 3.4
+    if elapsed < BTN_START:
+        return None
+    btn_p = phase(BTN_START, 0.45)
+    btn_w, btn_h = 200, 54
+    btn_rect = pygame.Rect(cx - btn_w // 2, HEIGHT - 80, btn_w, btn_h)
+    if btn_p < 1.0:
+        scale = _ease_out_back(btn_p)
+        sw = max(1, int(btn_w * scale))
+        sh = max(1, int(btn_h * scale))
+        btn_surf = pygame.Surface((btn_w, btn_h), pygame.SRCALPHA)
+        draw_crafted_button(btn_surf, pygame.Rect(0, 0, btn_w, btn_h),
+                            "MENU", font_ui, (100, 196, 248))
+        scaled_btn = pygame.transform.smoothscale(btn_surf, (sw, sh))
+        screen.blit(scaled_btn, (cx - sw // 2, btn_rect.centery - sh // 2))
+        return None
+    draw_crafted_button(screen, btn_rect, "MENU", font_ui, (100, 196, 248))
+    return btn_rect
+
 
 def draw_won_gameover(screen, dt, game_state_val, selected_idx, win_animation_start_time, win_particles, scroll_y, menu_images):
     msg = REWARDS[selected_idx] if game_state_val == GameState.WON else "Better luck next time!"
@@ -3013,8 +2951,8 @@ async def main():
             await asyncio.sleep(1)
 
 async def _main():
-    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape, trivia_question_start, secret_button_appear_time, secret_unlocked_seen, hint_popup_start, hint_click_count, puzzle_preview_start, puzzle_full_image, puzzle_move_count, hint_button_reveal_time, puzzle_auto_solve_used, puzzle_awaiting_start
-    global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, kidsqs_video_path, pdf_surface, pdf_surface_height, font_title, font_win, font_ui, font_huge
+    global game_state, selected_idx, cards, first, second, wait_timer, start_time, paused_time, modal_image, modal_start_time, win_animation_start_time, win_particles, scroll_y, completed_games, current_question_idx, landscape_ready_start, prev_game_state_before_landscape, trivia_question_start, hint_popup_start, hint_click_count, puzzle_preview_start, puzzle_full_image, puzzle_move_count, hint_button_reveal_time, puzzle_auto_solve_used, puzzle_awaiting_start, _love_note_start
+    global screen, clock, crafted_bg, game_images, reward_images, menu_images, nodo_image, nodo_video_path, massage_video_path, kidsqs_video_path, font_title, font_win, font_ui, font_huge
     global _finger_pressed, _finger_pos
 
     pygame.display.init()
@@ -3026,27 +2964,6 @@ async def _main():
     _init_sounds()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     clock = pygame.time.Clock()
-
-    pdf_surface = None
-    pdf_surface_height = 0
-    if HAS_FITZ and os.path.exists(MENU_PDF):
-        try:
-            doc = fitz.open(MENU_PDF)
-            pages = []
-            for page in doc:
-                zoom = WIDTH / page.rect.width
-                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
-                pages.append(pygame.image.load(io.BytesIO(pix.tobytes("png"))).convert())
-            doc.close()
-            if pages:
-                pdf_surface_height = sum(s.get_height() for s in pages)
-                pdf_surface = pygame.Surface((WIDTH, pdf_surface_height))
-                y = 0
-                for s in pages:
-                    pdf_surface.blit(s, (0, y))
-                    y += s.get_height()
-        except Exception as e:
-            print(f"ERROR: Could not load menu PDF: {e}")
 
     crafted_bg = CraftedBackground()
     game_images = load_images()
@@ -3245,8 +3162,6 @@ async def _main():
     save_button_rect = None
     exit_button_rect = None
     secret_gift_rect = None
-    pdf_scroll_y = 0
-    pdf_close_rect = None
     correct_anim_start = 0
     correct_anim_pos = (WIDTH // 2, HEIGHT // 2)
     correct_anim_items = []
@@ -3268,13 +3183,9 @@ async def _main():
                 landscape_ready_start = time.time()
                 game_state = GameState.LANDSCAPE_READY
             elif not _in_landscape and game_state == GameState.LANDSCAPE_READY:
-                game_state = prev_game_state_before_landscape or GameState.ORIENTATION_PROMPT
+                game_state = prev_game_state_before_landscape or GameState.MENU
 
-        if game_state == GameState.ORIENTATION_PROMPT:
-            if draw_orientation_prompt(screen, dt):
-                game_state = GameState.MENU
-
-        elif game_state == GameState.LANDSCAPE_READY:
+        if game_state == GameState.LANDSCAPE_READY:
             elapsed = time.time() - landscape_ready_start
             draw_landscape_ready(screen, dt, elapsed)
 
@@ -3384,25 +3295,25 @@ async def _main():
                                       "size": random.uniform(1.0, 3.0), "speed": random.uniform(100, 200),
                                       "seed": random.random(), "color": random.choice([COLOR_SOFT_PINK, COLOR_ROSE_GOLD, COLOR_CREAM])} for _ in range(40)]
 
-        elif game_state == GameState.PDF_VIEWER:
-            pdf_close_rect = draw_pdf_viewer(screen, pdf_surface, pdf_surface_height, pdf_scroll_y)
-
         elif game_state == GameState.FINAL_MESSAGE:
             menu_button_rect, exit_button_rect, secret_gift_rect = draw_final_message(screen, dt, transition_particles)
 
         elif game_state == GameState.SECRET_REWARD:
             if IS_WEB:
                 await play_video_web("KidsQs.MOV")
-                game_state = GameState.MENU
-                selected_idx = None
+                game_state = GameState.LOVE_NOTE
+                _love_note_start = None
                 menu_button_rect = None
             elif kidsqs_video_path and HAS_VIDEO_LIB:
                 await play_video(kidsqs_video_path)
-                game_state = GameState.MENU
-                selected_idx = None
+                game_state = GameState.LOVE_NOTE
+                _love_note_start = None
                 menu_button_rect = None
             else:
                 menu_button_rect = draw_secret_reward(screen, dt, win_animation_start_time, win_particles)
+
+        elif game_state == GameState.LOVE_NOTE:
+            menu_button_rect = draw_love_note(screen, dt)
 
         elif game_state == GameState.TRIVIA_CORRECT:
             if draw_trivia_correct(screen, dt, correct_anim_start, current_question_idx, correct_anim_pos, correct_anim_items):
@@ -3424,18 +3335,8 @@ async def _main():
             menu_button_rect, save_button_rect = draw_won_gameover(screen, dt, game_state, selected_idx, win_animation_start_time, win_particles, scroll_y, menu_images)
 
         for event in pygame.event.get():
-            debug_last_event = str(event)
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == pygame.KEYDOWN:
-                if game_state == GameState.ORIENTATION_PROMPT:
-                    _prompt_start = None
-                    game_state = GameState.MENU
-                elif game_state == GameState.PDF_VIEWER:
-                    if event.key in (pygame.K_DOWN, pygame.K_RIGHT):
-                        pdf_scroll_y = min(max(0, pdf_surface_height - HEIGHT), pdf_scroll_y + 80)
-                    elif event.key in (pygame.K_UP, pygame.K_LEFT):
-                        pdf_scroll_y = max(0, pdf_scroll_y - 80)
             if event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
                 # Debounce ALL press events. Mobile pygbag may fire any of:
                 # FINGERDOWN + synthesized MOUSEBUTTONDOWN, two MOUSEBUTTONDOWNs
@@ -3451,10 +3352,7 @@ async def _main():
                     _finger_pos = (mx, my)
                 else:
                     mx, my = event.pos
-                if game_state == GameState.ORIENTATION_PROMPT:
-                    _prompt_start = None
-                    game_state = GameState.MENU
-                elif game_state == GameState.MENU and event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
+                if game_state == GameState.MENU and event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
                     for i, btn_rect in enumerate(_menu_button_rects()):
                         if btn_rect.collidepoint(mx, my):
                             selected_idx = i
@@ -3556,10 +3454,12 @@ async def _main():
                         game_state = GameState.MENU
                         selected_idx = None
                         menu_button_rect = None
-                elif game_state == GameState.PDF_VIEWER:
-                    if pdf_close_rect and pdf_close_rect.collidepoint(mx, my):
+                elif game_state == GameState.LOVE_NOTE:
+                    if menu_button_rect and menu_button_rect.collidepoint(mx, my):
                         game_state = GameState.MENU
                         selected_idx = None
+                        menu_button_rect = None
+                        _love_note_start = None
                 elif game_state in [GameState.WON, GameState.GAMEOVER, GameState.FINAL_MESSAGE]:
                     if game_state == GameState.WON and time.time() - win_animation_start_time < 0.5:
                         continue
@@ -3600,10 +3500,7 @@ async def _main():
                     elif game_state == GameState.FINAL_MESSAGE and exit_button_rect and exit_button_rect.collidepoint(mx, my):
                         running = False
             if event.type == pygame.MOUSEWHEEL:
-                if game_state == GameState.PDF_VIEWER:
-                    pdf_scroll_y -= event.y * 40
-                    pdf_scroll_y = max(0, min(pdf_scroll_y, max(0, pdf_surface_height - HEIGHT)))
-                elif game_state == GameState.WON and selected_idx == 2:
+                if game_state == GameState.WON and selected_idx == 2:
                     scroll_y -= event.y * 30
                     content_h = sum(img.get_height() + 20 for img in menu_images) + 20
                     scroll_y = max(0, min(scroll_y, max(0, content_h - HEIGHT)))
