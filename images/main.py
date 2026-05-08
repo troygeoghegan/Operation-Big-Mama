@@ -3250,7 +3250,7 @@ async def _main():
     correct_anim_start = 0
     correct_anim_pos = (WIDTH // 2, HEIGHT // 2)
     correct_anim_items = []
-    _last_finger_time = 0.0  # for deduping mobile's FINGERDOWN + synthesized MOUSEBUTTONDOWN
+    _last_press_time = 0.0  # debounce all press events (mobile pygbag may fire several per tap)
     _finger_pressed = False  # Track if finger is currently pressed
     _finger_pos = (0, 0)  # Position of finger press
     while running:
@@ -3437,12 +3437,15 @@ async def _main():
                     elif event.key in (pygame.K_UP, pygame.K_LEFT):
                         pdf_scroll_y = max(0, pdf_scroll_y - 80)
             if event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN):
-                # Mobile fires BOTH FINGERDOWN and a synthesized MOUSEBUTTONDOWN
-                # for one tap. Drop the mouse one if a finger event just landed.
-                if event.type == pygame.MOUSEBUTTONDOWN and time.time() - _last_finger_time < 0.5:
+                # Debounce ALL press events. Mobile pygbag may fire any of:
+                # FINGERDOWN + synthesized MOUSEBUTTONDOWN, two MOUSEBUTTONDOWNs
+                # (touchstart + click), etc. — so we ignore any press that
+                # arrives within 300ms of the previous one regardless of type.
+                _now = time.time()
+                if _now - _last_press_time < 0.30:
                     continue
+                _last_press_time = _now
                 if event.type == pygame.FINGERDOWN:
-                    _last_finger_time = time.time()
                     mx, my = int(event.x * WIDTH), int(event.y * HEIGHT)
                     _finger_pressed = True
                     _finger_pos = (mx, my)
