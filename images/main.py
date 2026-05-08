@@ -3083,11 +3083,22 @@ async def _main():
                 _black.fill((0, 0, 0, 255))
                 sereno_logo.blit(_black, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
                 break
-        for fname in ("nodo.jpg", "nodo.jpeg", "nodo.png", "dinner.jpg"):
+        # Local first (fast on desktop, also works in pygbag if bundled)
+        for fname in ("https://github.com/troygeoghegan/Operation-Big-Mama/blob/main/images/nodo.jpg", "nodo.jpeg", "nodo.png", "dinner.jpg"):
             p = os.path.join(img_dir, fname)
             if os.path.exists(p):
-                dinner_hero = pygame.image.load(p).convert_alpha()
-                break
+                try:
+                    dinner_hero = pygame.image.load(p).convert_alpha()
+                    break
+                except Exception: pass
+        # Fallback: fetch from GitHub raw if local isn't available (mobile case)
+        if dinner_hero is None:
+            try:
+                import io, urllib.request
+                _nodo_url = "https://raw.githubusercontent.com/troygeoghegan/Operation-Big-Mama/main/images/nodo.jpg"
+                with urllib.request.urlopen(_nodo_url, timeout=10) as _r:
+                    dinner_hero = pygame.image.load(io.BytesIO(_r.read())).convert_alpha()
+            except Exception: pass
         files = {1: "massage.jpg.jpeg", 2: "dinner.jpg"}
         space_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "SpaceSwarm")
         for idx, fname in files.items():
