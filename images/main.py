@@ -2985,48 +2985,36 @@ async def _main():
     massage_hero = None
     sereno_logo = None
     dinner_hero = None
-    try:
-        img_dir = os.path.dirname(os.path.abspath(__file__))
-        root_path = os.path.dirname(img_dir)
-        for fname in ("brunch2.jpeg", "brunch2.jpg", "Amal-Pancakes.jpg", "Amal-Pancakes.jpeg", "Amal-Pancakes.png"):
+    img_dir = os.path.dirname(os.path.abspath(__file__))
+
+    def _try_load(filenames):
+        """Walk `filenames` in order; return the first one that loads.
+        Each load is isolated so a corrupt/unsupported file (pygbag/Pyodide
+        sometimes can't decode JPEG/WEBP) doesn't skip the rest."""
+        for fname in filenames:
             p = os.path.join(img_dir, fname)
-            if os.path.exists(p):
-                brunch_hero = pygame.image.load(p).convert_alpha()
-                break
-        for fname in ("nola.webp", "NOLA.webp", "NOLA.png", "nola.png", "nola-logo.png", "NOLA-logo.png", "NOLA.jpg", "nola.jpg"):
-            p = os.path.join(img_dir, fname)
-            if os.path.exists(p):
-                nola_logo = pygame.image.load(p).convert_alpha()
-                break
-        for fname in ("therapeute.jpg", "gettyimages-1590247404-170667a.jpg", "massage-hero.jpg", "massage-hero.png"):
-            p = os.path.join(img_dir, fname)
-            if os.path.exists(p):
-                massage_hero = pygame.image.load(p).convert_alpha()
-                break
-        for fname in ("Sereno-logo.png", "sereno-logo.png", "Sereno.png", "sereno.png"):
-            p = os.path.join(img_dir, fname)
-            if os.path.exists(p):
-                sereno_logo = pygame.image.load(p).convert_alpha()
-                _black = pygame.Surface(sereno_logo.get_size(), pygame.SRCALPHA)
-                _black.fill((0, 0, 0, 255))
-                sereno_logo.blit(_black, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-                break
-        for fname in ("nodo.jpg", "nodo.jpeg", "nodo.png", "dinner.jpg"):
-            p = os.path.join(img_dir, fname)
-            if os.path.exists(p):
-                dinner_hero = pygame.image.load(p).convert_alpha()
-                break
-        files = {1: "massage.jpg.jpeg", 2: "dinner.jpg"}
-        space_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "SpaceSwarm")
-        for idx, fname in files.items():
-            path = os.path.join(space_path, fname)
-            if os.path.exists(path):
-                reward_images[idx] = pygame.image.load(path).convert_alpha()
-            else:
-                path = os.path.join(space_path, "Images", fname)
-                if os.path.exists(path):
-                    reward_images[idx] = pygame.image.load(path).convert_alpha()
-    except Exception: pass
+            if not os.path.exists(p):
+                continue
+            try:
+                return pygame.image.load(p).convert_alpha()
+            except Exception as e:
+                print(f"Failed to load {fname}: {e}")
+        return None
+
+    # PNG variants listed first — pygbag/Pyodide is reliable on PNG, less so on JPEG/WEBP.
+    brunch_hero  = _try_load(("brunch2.png", "brunch2.jpeg", "brunch2.jpg",
+                              "Amal-Pancakes.png", "Amal-Pancakes.jpg", "Amal-Pancakes.jpeg"))
+    nola_logo    = _try_load(("nola.png", "NOLA.png", "nola-logo.png", "NOLA-logo.png",
+                              "nola.webp", "NOLA.webp", "NOLA.jpg", "nola.jpg"))
+    massage_hero = _try_load(("therapeute.png", "therapeute.jpg",
+                              "massage-hero.png", "massage-hero.jpg",
+                              "gettyimages-1590247404-170667a.jpg"))
+    sereno_logo  = _try_load(("Sereno-logo.png", "sereno-logo.png", "Sereno.png", "sereno.png"))
+    if sereno_logo is not None:
+        _black = pygame.Surface(sereno_logo.get_size(), pygame.SRCALPHA)
+        _black.fill((0, 0, 0, 255))
+        sereno_logo.blit(_black, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    dinner_hero  = _try_load(("nodo.png", "nodo.jpg", "nodo.jpeg", "dinner.png", "dinner.jpg"))
 
     menu_images = []
     try:
