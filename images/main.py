@@ -757,8 +757,9 @@ def create_board(images, num_pairs=9):
         })
     return cards
 
-async def play_video_web(url):
-    """Fullscreen autoplay video with NODO logo and skip button."""
+async def play_video_web(url, allow_skip=True):
+    """Fullscreen autoplay video with NODO logo and skip button.
+    allow_skip=False makes the video unskippable (used for the Secret Gift)."""
     if not IS_WEB:
         return
     try:
@@ -771,17 +772,44 @@ async def play_video_web(url):
         wrap.style.cssText = ("position:fixed;top:0;left:0;width:100%;height:100%;"
                               "z-index:9999;background:#000;")
 
-        # Video — autoplay (browser honours this after prior user interaction)
+        # Start muted — mobile browsers (iOS Safari, Chrome) only allow
+        # autoplay without sound. Starting muted guarantees the video plays;
+        # the "Tap for sound" hint + wrap-level click handler unmute on first
+        # interaction. Both the `muted` attribute and the property are set
+        # because iOS Safari only honours the attribute at element creation.
         v = js.document.createElement("video")
         v.id = "_nodo_vid"
         v.setAttribute("autoplay",        "")
+        v.setAttribute("muted",           "")
         v.setAttribute("playsinline",     "")
         v.setAttribute("webkit-playsinline", "")
         v.setAttribute("onended", done_js)
         v.setAttribute("onerror", done_js)
         v.style.cssText = "width:100%;height:100%;object-fit:cover;"
+        v.muted = True
+        v.volume = 1.0
         v.src = url
         wrap.appendChild(v)
+
+        # "Tap for sound" hint — fades out on first interaction
+        hint = js.document.createElement("div")
+        hint.id = "_nodo_hint"
+        hint.textContent = "Tap for sound"
+        hint.style.cssText = ("position:absolute;top:50%;left:50%;"
+                              "transform:translate(-50%,-50%);"
+                              "padding:14px 28px;background:rgba(0,0,0,0.65);"
+                              "color:#fff;font-size:18px;font-weight:bold;"
+                              "border-radius:24px;pointer-events:none;"
+                              "z-index:10001;transition:opacity 0.5s;")
+        wrap.appendChild(hint)
+
+        # First tap unmutes the video and hides the hint. Harmless if the
+        # browser ever does allow unmuted autoplay.
+        wrap.setAttribute("onclick",
+            "var _v=document.getElementById('_nodo_vid');"
+            "if(_v){_v.muted=false;_v.volume=1.0;_v.play();}"
+            "var _h=document.getElementById('_nodo_hint');"
+            "if(_h){_h.style.opacity=0;}")
 
         # NODO logo — centred, lower-third
         logo = js.document.createElement("img")
@@ -791,18 +819,19 @@ async def play_video_web(url):
                               "opacity:0.85;pointer-events:none;z-index:10001;")
         wrap.appendChild(logo)
 
-        # Skip button — visible immediately, bottom centre
-        skip = js.document.createElement("button")
-        skip.id = "_nodo_skip"
-        skip.textContent = "Skip"
-        skip.style.cssText = ("position:absolute;bottom:36px;left:50%;"
-                              "transform:translateX(-50%);padding:10px 40px;"
-                              "background:rgba(235,196,196,0.92);color:rgb(94,80,80);"
-                              "border:none;border-radius:24px;font-size:17px;"
-                              "font-weight:bold;cursor:pointer;z-index:10002;")
-        skip.setAttribute("onclick",      done_js + ";document.getElementById('_nodo_vid').pause()")
-        skip.setAttribute("ontouchstart", done_js + ";document.getElementById('_nodo_vid').pause()")
-        wrap.appendChild(skip)
+        if allow_skip:
+            # Skip button — visible immediately, bottom centre
+            skip = js.document.createElement("button")
+            skip.id = "_nodo_skip"
+            skip.textContent = "Skip"
+            skip.style.cssText = ("position:absolute;bottom:36px;left:50%;"
+                                  "transform:translateX(-50%);padding:10px 40px;"
+                                  "background:rgba(235,196,196,0.92);color:rgb(94,80,80);"
+                                  "border:none;border-radius:24px;font-size:17px;"
+                                  "font-weight:bold;cursor:pointer;z-index:10002;")
+            skip.setAttribute("onclick",      done_js + ";document.getElementById('_nodo_vid').pause()")
+            skip.setAttribute("ontouchstart", done_js + ";document.getElementById('_nodo_vid').pause()")
+            wrap.appendChild(skip)
 
         js.document.body.appendChild(wrap)
         while wrap.getAttribute("data-done") != "1":
@@ -811,10 +840,12 @@ async def play_video_web(url):
     except Exception as e:
         print("video error:", e)
 
-async def play_video(filepath, max_duration=None, start_offset=0.0):
+async def play_video(filepath, max_duration=None, start_offset=0.0, allow_skip=True):
     """Play a video. Returns 'ended' (natural end / max_duration reached),
     'skipped' (Skip pressed), or 'menu' (Menu pressed).
-    start_offset (seconds) skips into the video before playback begins."""
+    start_offset (seconds) skips into the video before playback begins.
+    allow_skip=False hides the Skip button and ignores skip inputs (used
+    for the Secret Gift, which must play to its natural end)."""
     if not HAS_VIDEO_LIB: return "ended"
     result = "ended"
     try:
@@ -849,10 +880,10 @@ async def play_video(filepath, max_duration=None, start_offset=0.0):
                 if event.type == pygame.QUIT:
                     result = "skipped"
                     break
-                elif event.type == pygame.KEYDOWN:
+                elif allow_skip and event.type == pygame.KEYDOWN:
                     result = "skipped"
                     break
-                elif event.type == pygame.MOUSEBUTTONDOWN:
+                elif allow_skip and event.type == pygame.MOUSEBUTTONDOWN:
                     if skip_rect.collidepoint(event.pos):
                         result = "skipped"
                         break
@@ -881,7 +912,7 @@ async def play_video(filepath, max_duration=None, start_offset=0.0):
                 fade_surf.fill((255, 255, 255, alpha))
                 screen.blit(fade_surf, (0, 0))
                 
-            if elapsed > 1.0:
+            if elapsed > 1.0 and allow_skip:
                 draw_crafted_button(screen, skip_rect, "Skip", font_ui, COLOR_BLUSH)
                 
             pygame.display.flip()
@@ -2985,48 +3016,36 @@ async def _main():
     massage_hero = None
     sereno_logo = None
     dinner_hero = None
-    try:
-        img_dir = os.path.dirname(os.path.abspath(__file__))
-        root_path = os.path.dirname(img_dir)
-        for fname in ("brunch2.jpeg", "brunch2.jpg", "Amal-Pancakes.jpg", "Amal-Pancakes.jpeg", "Amal-Pancakes.png"):
+    img_dir = os.path.dirname(os.path.abspath(__file__))
+
+    def _try_load(filenames):
+        """Walk `filenames` in order; return the first one that loads.
+        Each load is isolated so a corrupt/unsupported file (pygbag/Pyodide
+        sometimes can't decode JPEG/WEBP) doesn't skip the rest."""
+        for fname in filenames:
             p = os.path.join(img_dir, fname)
-            if os.path.exists(p):
-                brunch_hero = pygame.image.load(p).convert_alpha()
-                break
-        for fname in ("nola.webp", "NOLA.webp", "NOLA.png", "nola.png", "nola-logo.png", "NOLA-logo.png", "NOLA.jpg", "nola.jpg"):
-            p = os.path.join(img_dir, fname)
-            if os.path.exists(p):
-                nola_logo = pygame.image.load(p).convert_alpha()
-                break
-        for fname in ("therapeute.jpg", "gettyimages-1590247404-170667a.jpg", "massage-hero.jpg", "massage-hero.png"):
-            p = os.path.join(img_dir, fname)
-            if os.path.exists(p):
-                massage_hero = pygame.image.load(p).convert_alpha()
-                break
-        for fname in ("Sereno-logo.png", "sereno-logo.png", "Sereno.png", "sereno.png"):
-            p = os.path.join(img_dir, fname)
-            if os.path.exists(p):
-                sereno_logo = pygame.image.load(p).convert_alpha()
-                _black = pygame.Surface(sereno_logo.get_size(), pygame.SRCALPHA)
-                _black.fill((0, 0, 0, 255))
-                sereno_logo.blit(_black, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-                break
-        for fname in ("nodo.jpg", "nodo.jpeg", "nodo.png", "dinner.jpg"):
-            p = os.path.join(img_dir, fname)
-            if os.path.exists(p):
-                dinner_hero = pygame.image.load(p).convert_alpha()
-                break
-        files = {1: "massage.jpg.jpeg", 2: "dinner.jpg"}
-        space_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "SpaceSwarm")
-        for idx, fname in files.items():
-            path = os.path.join(space_path, fname)
-            if os.path.exists(path):
-                reward_images[idx] = pygame.image.load(path).convert_alpha()
-            else:
-                path = os.path.join(space_path, "Images", fname)
-                if os.path.exists(path):
-                    reward_images[idx] = pygame.image.load(path).convert_alpha()
-    except Exception: pass
+            if not os.path.exists(p):
+                continue
+            try:
+                return pygame.image.load(p).convert_alpha()
+            except Exception as e:
+                print(f"Failed to load {fname}: {e}")
+        return None
+
+    # PNG variants listed first — pygbag/Pyodide is reliable on PNG, less so on JPEG/WEBP.
+    brunch_hero  = _try_load(("brunch2.png", "brunch2.jpeg", "brunch2.jpg",
+                              "Amal-Pancakes.png", "Amal-Pancakes.jpg", "Amal-Pancakes.jpeg"))
+    nola_logo    = _try_load(("nola.png", "NOLA.png", "nola-logo.png", "NOLA-logo.png",
+                              "nola.webp", "NOLA.webp", "NOLA.jpg", "nola.jpg"))
+    massage_hero = _try_load(("therapeute.png", "therapeute.jpg",
+                              "massage-hero.png", "massage-hero.jpg",
+                              "gettyimages-1590247404-170667a.jpg"))
+    sereno_logo  = _try_load(("Sereno-logo.png", "sereno-logo.png", "Sereno.png", "sereno.png"))
+    if sereno_logo is not None:
+        _black = pygame.Surface(sereno_logo.get_size(), pygame.SRCALPHA)
+        _black.fill((0, 0, 0, 255))
+        sereno_logo.blit(_black, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    dinner_hero  = _try_load(("nodo.png", "nodo.jpg", "nodo.jpeg", "dinner.png", "dinner.jpg"))
 
     menu_images = []
     try:
@@ -3311,12 +3330,12 @@ async def _main():
 
         elif game_state == GameState.SECRET_REWARD:
             if IS_WEB:
-                await play_video_web("KidsQs.MOV")
+                await play_video_web("KidsQs.MOV", allow_skip=False)
                 game_state = GameState.LOVE_NOTE
                 _love_note_start = None
                 menu_button_rect = None
             elif kidsqs_video_path and HAS_VIDEO_LIB:
-                await play_video(kidsqs_video_path)
+                await play_video(kidsqs_video_path, allow_skip=False)
                 game_state = GameState.LOVE_NOTE
                 _love_note_start = None
                 menu_button_rect = None

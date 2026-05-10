@@ -5,9 +5,7 @@ QR code points to.
 Workflow:
   1. If there are uncommitted source changes, commits + pushes them to main.
   2. Runs `pygbag --build images/main.py` to produce build/web/.
-  3. Copies the built bundle into a temporary git worktree on gh-pages.
-  4. Commits + pushes gh-pages.
-  5. Cleans up the worktree.
+  3. Clones gh-pages into a temp dir, overlays the new build, commits + pushes.
 
 Usage: open this file in your IDE and hit "Run Python File".
 """
@@ -16,11 +14,11 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
-REPO_DIR     = os.path.dirname(os.path.abspath(__file__))
-TARGET_URL   = "https://troygeoghegan.github.io/Operation-Big-Mama/"
-WORKTREE_DIR = os.path.join(REPO_DIR, ".gh-pages-worktree")
+REPO_DIR   = os.path.dirname(os.path.abspath(__file__))
+TARGET_URL = "https://troygeoghegan.github.io/Operation-Big-Mama/"
 
 
 def run(cmd, cwd=None, check=True, capture=False):
@@ -112,43 +110,38 @@ def cache_bust(web_dir):
 
 
 def deploy_to_gh_pages(web_dir):
-    # Wipe any leftover worktree from a prior run
-    if os.path.isdir(WORKTREE_DIR):
-        run(["git", "worktree", "remove", "--force", WORKTREE_DIR], check=False)
+    remote = run(["git", "config", "--get", "remote.origin.url"], capture=True).stdout.strip()
 
-    run(["git", "fetch", "origin", "gh-pages"])
-    # -B resets local gh-pages to origin/gh-pages and checks it out
-    run(["git", "worktree", "add", "-B", "gh-pages", WORKTREE_DIR, "origin/gh-pages"])
+    with tempfile.TemporaryDirectory(prefix="ghp-deploy-") as tmp:
+        run(["git", "clone", "--branch", "gh-pages", "--single-branch", remote, tmp])
 
-    # Remove stale versioned bundles from gh-pages so it doesn't bloat over
-    # time. (Static assets like nodo.mp4 / nodo_logo.png / favicon.png stay.)
-    for entry in os.listdir(WORKTREE_DIR):
-        if entry == ".git":
-            continue
-        if entry.startswith("images") and (entry.endswith(".apk") or entry.endswith(".tar.gz")):
-            os.remove(os.path.join(WORKTREE_DIR, entry))
+        # Remove stale versioned bundles from gh-pages so it doesn't bloat over
+        # time. (Static assets like nodo.mp4 / nodo_logo.png / favicon.png stay.)
+        for entry in os.listdir(tmp):
+            if entry == ".git":
+                continue
+            if entry.startswith("images") and (entry.endswith(".apk") or entry.endswith(".tar.gz")):
+                os.remove(os.path.join(tmp, entry))
 
-    # Overlay the new build onto gh-pages (don't wipe other files —
-    # preserves manually-uploaded assets that the game loads by URL).
-    for entry in os.listdir(web_dir):
-        src = os.path.join(web_dir, entry)
-        dst = os.path.join(WORKTREE_DIR, entry)
-        if os.path.isdir(src):
-            if os.path.isdir(dst):
-                shutil.rmtree(dst)
-            shutil.copytree(src, dst)
-        else:
-            shutil.copy2(src, dst)
+        # Overlay the new build onto gh-pages (don't wipe other files —
+        # preserves manually-uploaded assets that the game loads by URL).
+        for entry in os.listdir(web_dir):
+            src = os.path.join(web_dir, entry)
+            dst = os.path.join(tmp, entry)
+            if os.path.isdir(src):
+                if os.path.isdir(dst):
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+            else:
+                shutil.copy2(src, dst)
 
-    run(["git", "add", "-A"], cwd=WORKTREE_DIR)
-    diff = run(["git", "diff", "--cached", "--quiet"], cwd=WORKTREE_DIR, check=False)
-    if diff.returncode == 0:
-        print("No changes in built bundle. Skipping gh-pages commit.")
-    else:
-        run(["git", "commit", "-m", f"Deploy {time.strftime('%Y-%m-%d %H:%M')}"], cwd=WORKTREE_DIR)
-        run(["git", "push", "origin", "gh-pages"], cwd=WORKTREE_DIR)
-
-    run(["git", "worktree", "remove", "--force", WORKTREE_DIR])
+        run(["git", "add", "-A"], cwd=tmp)
+        diff = run(["git", "diff", "--cached", "--quiet"], cwd=tmp, check=False)
+        if diff.returncode == 0:
+            print("No changes in built bundle. Skipping gh-pages commit.")
+            return
+        run(["git", "commit", "-m", f"Deploy {time.strftime('%Y-%m-%d %H:%M')}"], cwd=tmp)
+        run(["git", "push", "origin", "gh-pages"], cwd=tmp)
 
 
 def main():
