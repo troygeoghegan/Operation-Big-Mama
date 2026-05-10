@@ -74,36 +74,41 @@ def build_web():
     # live inside pygbag's virtual FS since the <video> tag runs in the
     # browser context and must read from the same origin.
     images_dir = os.path.join(REPO_DIR, "images")
-    for fname in ("KidsQs.MOV", "KidsQs.mov", "KidsQs.mp4"):
+    for fname in ("Surprise.mov", "Surprise.MOV", "Surprise.mp4"):
         src = os.path.join(images_dir, fname)
         if os.path.isfile(src):
             shutil.copy2(src, os.path.join(out, fname))
             print(f"  copied {fname} into web bundle")
             break
+
+    # Drop the .tar.gz duplicate — pygbag emits both .apk and .tar.gz with
+    # identical contents; the runtime only needs the .apk.
+    for entry in os.listdir(out):
+        if entry.endswith(".tar.gz"):
+            os.remove(os.path.join(out, entry))
+            print(f"  pruned {entry} (duplicate of .apk)")
+
     print(f"Built: {out}\n")
     return out
 
 
 def cache_bust(web_dir):
-    """Append a per-deploy version suffix to the python bundle filenames
-    (images.apk / images.tar.gz) and patch index.html to match. The browser
-    sees a brand-new URL each deploy, so any cached old bundle is bypassed.
-    Returns the version string used.
+    """Append a per-deploy version suffix to the apk bundle filename and
+    patch index.html to match. The browser sees a brand-new URL each deploy,
+    so any cached old bundle is bypassed. Returns the version string used.
     """
     version = time.strftime("%Y%m%d%H%M%S")
-    renames = []
-    for old_name in ("images.apk", "images.tar.gz"):
-        old_path = os.path.join(web_dir, old_name)
-        if os.path.isfile(old_path):
-            new_name = old_name.replace("images.", f"images-{version}.")
-            shutil.move(old_path, os.path.join(web_dir, new_name))
-            renames.append((old_name, new_name))
+    old_name = "images.apk"
+    old_path = os.path.join(web_dir, old_name)
+    if not os.path.isfile(old_path):
+        return version
+    new_name = f"images-{version}.apk"
+    shutil.move(old_path, os.path.join(web_dir, new_name))
     idx = os.path.join(web_dir, "index.html")
-    if os.path.isfile(idx) and renames:
+    if os.path.isfile(idx):
         with open(idx, "r", encoding="utf-8") as f:
             html = f.read()
-        for old, new in renames:
-            html = html.replace(f'"{old}"', f'"{new}"')
+        html = html.replace(f'"{old_name}"', f'"{new_name}"')
         with open(idx, "w", encoding="utf-8") as f:
             f.write(html)
     return version

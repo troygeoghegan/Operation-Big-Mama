@@ -3122,7 +3122,7 @@ async def _main():
     kidsqs_video_path = None
     try:
         _img_dir = os.path.dirname(os.path.abspath(__file__))
-        for fname in ["KidsQs.MOV", "KidsQs.mov", "KidsQs.mp4", "kidsqs.mov", "kidsqs.mp4"]:
+        for fname in ["Surprise.mov", "Surprise.MOV", "Surprise.mp4"]:
             fpath = os.path.join(_img_dir, fname)
             if os.path.exists(fpath):
                 kidsqs_video_path = fpath
@@ -3330,7 +3330,7 @@ async def _main():
 
         elif game_state == GameState.SECRET_REWARD:
             if IS_WEB:
-                await play_video_web("KidsQs.MOV", allow_skip=False)
+                await play_video_web("Surprise.mov", allow_skip=False)
                 game_state = GameState.LOVE_NOTE
                 _love_note_start = None
                 menu_button_rect = None
